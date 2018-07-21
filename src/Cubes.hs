@@ -105,22 +105,19 @@ createPathThroughSpace_ mt res resSet start end =
 
 createPathThroughSpace :: MT.ModelTree -> DVec -> DVec -> Maybe [DVec]
 createPathThroughSpace mt start end =
-    fmap
-        List.reverse
-        (createPathThroughSpace_ mt [] (Set.insert start Set.empty) start end)
+    if MT.lookupTree end mt || MT.lookupTree start mt then
+        Nothing
+    else
+        fmap
+            List.reverse
+            (createPathThroughSpace_ mt [] (Set.insert start Set.empty) start end)
                              
 {- Maneuver to the upper left forward corner of the 6x6 cube at the center of the 8x8 cube.
  - Draw it by scanning over it from bottom to top, drawing below.
  - Be at the upper right corner when finished.
- - 
- - 
+ -
+ - We'll start in 
  -}
-{-
-doPathThroughCubes_ :: MT.ModelTree -> [DVec] -> [DVec] -> DVec -> DVec
+doPathThroughCubes_ :: MT.ModelTree -> [DVec] -> [DVec] -> DVec -> DVec -> Maybe [DVec]
 doPathThroughCubes_ mt cubes toFill ptn lastLoc =
-    case cubes of
-      [] -> do
-        pure lastLoc
-      hd : tl -> do
-          let targetPosition = 
--}
+    Nothing

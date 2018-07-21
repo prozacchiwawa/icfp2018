@@ -98,7 +98,19 @@ runSubCommands args =
         let y = read ystr :: Int
         let z = read zstr :: Int
         let p = createPathThroughSpace tree (DVec x y z) (DVec 0 0 0)
-        putStrLn ("path " ++ show p)
+        putStrLn ("path " ++ (show p))
+
+      "findPath2" : (filename : (sxstr : (systr : (szstr : (exstr : (eystr : (ezstr : tl))))))) -> do
+        file <- B.readFile filename
+        let tree = MT.makeTree 8 file
+        let sx = read sxstr :: Int
+        let sy = read systr :: Int
+        let sz = read szstr :: Int
+        let ex = read exstr :: Int
+        let ey = read eystr :: Int
+        let ez = read ezstr :: Int
+        let p = createPathThroughSpace tree (DVec sx sy sz) (DVec ex ey ez)
+        putStrLn ("path " ++ (show p))
                        
       "run" : (filename : (outfile : tl)) -> do
         file <- B.readFile filename
@@ -108,6 +120,9 @@ runSubCommands args =
 
         {- First try: flip, draw in each 6x6 interior cube, then finish the cubes in order. -}
         let c = Cubes.doCubes tree
+
+        let extracted = MT.extractCube (DVec 1 0 1) 8 tree
+        putStrLn (show extracted)
 {-
         putStrLn "flip"
         let resLoc = doPathThroughCubes mt c (DVec 0 0 0)

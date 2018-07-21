@@ -84,13 +84,30 @@ while l != "" and l != "done":
         elif words[0] == 'down':
             showingPlane = max(showingPlane - 1, 0)
         else:
-            x = int(words[0])
-            y = int(words[1])
-            z = int(words[2])
-            if (x,y,z) in cube:
-                cube.remove((x,y,z))
-            else:
-                cube.add((x,y,z))
+            if len(words) == 3:
+                x = int(words[0])
+                y = int(words[1])
+                z = int(words[2])
+                if (x,y,z) in cube:
+                    cube.remove((x,y,z))
+                else:
+                    cube.add((x,y,z))
+            elif len(words) == 7:
+                x1 = int(words[1])
+                y1 = int(words[2])
+                z1 = int(words[3])
+                x2 = int(words[4])
+                y2 = int(words[5])
+                z2 = int(words[6])
+                for x in range(x1,x2+1):
+                    for y in range(y1,y2+1):
+                        for z in range(z1,z2+1):
+                            if words[0] == 'erase':
+                                if (x,y,z) in cube:
+                                    cube.remove((x,y,z))
+                            elif words[0] == 'fill':
+                                cube.add((x,y,z))
+                            
     except:
         print('exception')
     print('plane %s' % showingPlane)

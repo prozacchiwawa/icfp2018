@@ -18,8 +18,9 @@ import Types
  - mscale determines the size of a leaf ByteString if it is a copy.
  - oscale determines the size of the leaves in this tree.
  -}
+
 data ModelTree = ModelTree
-    { prev :: Maybe ModelTree
+    { prev :: Maybe (DVec, ModelTree)
     , mscale :: Int
     , oscale :: Int
     , offset :: Int
@@ -31,7 +32,8 @@ data MapLayer = MapLayer
     , dim :: Int
     , layer :: B.ByteString
     }
-               
+
+{-               
 -- We will need to shorthand items in process in leaves in order to be able to compute with
 -- enough space to work.
 --
@@ -76,8 +78,7 @@ data MapLayer = MapLayer
 -- lines, then filling the backup lines with the power off.
 --
 -- The decide how to proceed.
---
-
+-}
 makeTree :: Int -> B.ByteString -> ModelTree
 makeTree n f =
     let actualSize = intcoerce (B.index f 0) in
@@ -153,19 +154,19 @@ lookupTree (DVec x y z) mt =
           lookupInNode (offset mt) scale (mod x scale) (mod y scale) (mod z scale) bits
       Nothing ->
           case (prev mt) of
-            Just p -> lookupTree (DVec x y z) p
+            Just (DVec ux uy uz, p) -> lookupTree (DVec (x+ux) (y+uy) (z+uz)) p
             Nothing -> False
 
 showSlice :: DVec -> ModelTree -> String
 showSlice dv@(DVec x y z) mt =
-    if z >= bound mt then
-        "|\n" ++ (showSlice (DVec (x+1) y 0) mt)
-    else if x >= bound mt then
+    if x >= bound mt then
+        "|\n" ++ (showSlice (DVec 0 y (z+1)) mt)
+    else if z >= bound mt then
         ""
     else if lookupTree dv mt then
-        "@@" ++ (showSlice (DVec x y (z+1)) mt)
+        "@@" ++ (showSlice (DVec (x+1) y z) mt)
     else
-        "  " ++ (showSlice (DVec x y (z+1)) mt)
+        "  " ++ (showSlice (DVec (x+1) y z) mt)
             
 showSlices_ :: Int -> ModelTree -> String
 showSlices_ y mt =
@@ -180,5 +181,15 @@ showSlices :: ModelTree -> String
 showSlices mt =
     showSlices_ 0 mt
 
+extractCube :: DVec -> Int -> ModelTree -> ModelTree
+extractCube start newsize mt =
+    ModelTree
+    { prev = Just (start, mt)
+    , mscale = cube mt
+    , oscale = newsize
+    , offset = 0
+    , tree = O.fromList []
+    }
+              
 instance Show ModelTree where
     show = showSlices
