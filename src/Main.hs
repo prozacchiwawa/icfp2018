@@ -85,23 +85,22 @@ runSubCommands args =
         listOutTraceCommands 0 l file
         runSubCommands tl
 
-      "coord-to-addr-test" : (filename : tl) -> do
-        file <- B.readFile filename
-        let tree = MT.makeTree 8 file
-        putStrLn ("offset 0 0 0 = " ++ (show (MT.bitByteOfCoord 1 (MT.bound tree) 0 0 0)))
-        putStrLn ("offset 2 0 2 = " ++ (show (MT.bitByteOfCoord 1 (MT.bound tree) 2 0 2)))
-        putStrLn ("offset 2 1 2 = " ++ (show (MT.bitByteOfCoord 1 (MT.bound tree) 2 1 2)))
-        putStrLn ("offset 0 2 0 = " ++ (show (MT.bitByteOfCoord 1 (MT.bound tree) 0 2 0)))
-        putStrLn ("offset 1 3 0 = " ++ (show (MT.bitByteOfCoord 1 (MT.bound tree) 1 3 0)))
-        runSubCommands tl
-                       
       "dump" : (filename : tl) -> do
         file <- B.readFile filename
         let tree = MT.makeTree 8 file
         putStrLn (show tree)
         runSubCommands tl
+
+      "findPath" : (filename : (xstr : (ystr : (zstr : tl)))) -> do
+        file <- B.readFile filename
+        let tree = MT.makeTree 8 file
+        let x = read xstr :: Int
+        let y = read ystr :: Int
+        let z = read zstr :: Int
+        let p = createPathThroughSpace tree (DVec x y z) (DVec 0 0 0)
+        putStrLn ("path " ++ show p)
                        
-      "run" : (filename : tl) -> do
+      "run" : (filename : (outfile : tl)) -> do
         file <- B.readFile filename
         let tree = MT.makeTree 8 file
         --let gd = MT.scanForFirstGrounded tree
@@ -109,7 +108,14 @@ runSubCommands args =
 
         {- First try: flip, draw in each 6x6 interior cube, then finish the cubes in order. -}
         let c = Cubes.doCubes tree
-        putStrLn ("cubes " ++ (show c))
+{-
+        putStrLn "flip"
+        let resLoc = doPathThroughCubes mt c (DVec 0 0 0)
+        let finLoc = doFinishCubes mt c resLoc
+        putStrLn "flip"
+        returnHome finLoc
+-}
+        runSubCommands tl
 
       "sqlite-test" : (filename : tl) -> do
         SQL.runDB

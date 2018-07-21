@@ -2,6 +2,7 @@ module Cubes where
 
 import Data.Bits
 import Data.Word
+import qualified Data.List as List
 import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
 import Data.Set (Set)
@@ -43,4 +44,83 @@ doCubes_ acc f dv@(DVec x y z) mt =
 doCubes :: MT.ModelTree -> Set DVec
 doCubes mt =
     doCubes_ Set.empty Set.insert (DVec 0 0 0) mt
-    
+
+{- Get the possible neighboring moves from here -}
+neighborMoves :: MT.ModelTree -> [DVec] -> DVec -> [DVec]
+neighborMoves mt res at@(DVec x y z) =
+    let
+        bounds = MT.bound mt
+        toLeft = DVec (x-1) y z
+        toRight = DVec (x+1) y z
+        above = DVec x (y+1) z
+        below = DVec x (y-1) z
+        ahead = DVec x y (z-1)
+        behind = DVec x y (z+1)
+        possible = [ toLeft, toRight, above, below, ahead, behind ]
+    in
+    List.filter
+        (\at@(DVec x y z) ->
+             x >= 0 && y >= 0 && z >= 0 &&
+             x < bounds && y < bounds && z < bounds &&
+             (not (MT.lookupTree at mt))
+        )
+        possible
+
+manhattanDistance :: DVec -> DVec -> Int
+manhattanDistance (DVec sx sy sz) (DVec ex ey ez) =
+    (abs (ex - sx)) + (abs (ey - sy)) + (abs (ez - sz))
+
+{- Path through space given tree object that specifies the taken elements in the space.
+ -}
+createPathThroughSpace_ :: MT.ModelTree -> [DVec] -> Set DVec -> DVec -> DVec -> Maybe [DVec]
+createPathThroughSpace_ mt res resSet start end =
+    if start == end then
+        Just res
+    else
+        let
+            moves =
+                List.filter
+                        (\at -> not (Set.member at resSet))
+                        (neighborMoves mt res start)
+            sorted =
+                List.sort
+                    (List.map
+                             (\a -> (manhattanDistance a end, a))
+                             moves
+                    )
+        in
+        runThroughAlternatives (List.map (\(x,y) -> y) sorted)
+    where
+      runThroughAlternatives alts =
+          case alts of
+            [] ->
+              Nothing
+            hd : tl ->
+                let newResSet = Set.insert hd resSet in
+                case createPathThroughSpace_ mt (hd : res) newResSet hd end of
+                  Just path ->
+                      Just path
+                  Nothing ->
+                      runThroughAlternatives tl
+
+createPathThroughSpace :: MT.ModelTree -> DVec -> DVec -> Maybe [DVec]
+createPathThroughSpace mt start end =
+    fmap
+        List.reverse
+        (createPathThroughSpace_ mt [] (Set.insert start Set.empty) start end)
+                             
+{- Maneuver to the upper left forward corner of the 6x6 cube at the center of the 8x8 cube.
+ - Draw it by scanning over it from bottom to top, drawing below.
+ - Be at the upper right corner when finished.
+ - 
+ - 
+ -}
+{-
+doPathThroughCubes_ :: MT.ModelTree -> [DVec] -> [DVec] -> DVec -> DVec
+doPathThroughCubes_ mt cubes toFill ptn lastLoc =
+    case cubes of
+      [] -> do
+        pure lastLoc
+      hd : tl -> do
+          let targetPosition = 
+-}
