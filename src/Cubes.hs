@@ -15,21 +15,21 @@ import qualified ModelTree as MT
 isNonEmptyCube startDv@(DVec sx sy sz) dv@(DVec x y z) mt =
     let step = MT.cube mt in
     if z >= sz + step then
-        isNonEmptyCube startDv (DVec (sx+1) sy 0) mt
+        isNonEmptyCube startDv (DVec (x+1) y 0) mt
     else if x >= sx + step then
-        isNonEmptyCube startDv (DVec 0 (sy+1) 0) mt
+        isNonEmptyCube startDv (DVec 0 (y+1) 0) mt
     else if y >= sy + step then
         False
     else if MT.lookupTree dv mt then
         True
     else
-        isNonEmptyCube startDv dv mt
+        isNonEmptyCube startDv (DVec x y (z+1)) mt
     
 doCubes_ acc f dv@(DVec x y z) mt =
     let n = MT.bound mt in
     let s = MT.cube mt in
     let u = DVec x y (z+s) in
-    if z >= n then
+    if (z+s) >= n then
         doCubes_ acc f (DVec (x+s) y 0) mt
     else if x >= n then
         doCubes_ acc f (DVec 0 (y+s) 0) mt
@@ -38,7 +38,7 @@ doCubes_ acc f dv@(DVec x y z) mt =
     else if isNonEmptyCube dv dv mt then
         doCubes_ (f dv acc) f u mt
     else
-        doCubes_ acc f dv mt
+        doCubes_ acc f u mt
 
 doCubes :: MT.ModelTree -> Set DVec
 doCubes mt =

@@ -85,6 +85,22 @@ runSubCommands args =
         listOutTraceCommands 0 l file
         runSubCommands tl
 
+      "coord-to-addr-test" : (filename : tl) -> do
+        file <- B.readFile filename
+        let tree = MT.makeTree 8 file
+        putStrLn ("offset 0 0 0 = " ++ (show (MT.bitByteOfCoord 1 (MT.bound tree) 0 0 0)))
+        putStrLn ("offset 2 0 2 = " ++ (show (MT.bitByteOfCoord 1 (MT.bound tree) 2 0 2)))
+        putStrLn ("offset 2 1 2 = " ++ (show (MT.bitByteOfCoord 1 (MT.bound tree) 2 1 2)))
+        putStrLn ("offset 0 2 0 = " ++ (show (MT.bitByteOfCoord 1 (MT.bound tree) 0 2 0)))
+        putStrLn ("offset 1 3 0 = " ++ (show (MT.bitByteOfCoord 1 (MT.bound tree) 1 3 0)))
+        runSubCommands tl
+                       
+      "dump" : (filename : tl) -> do
+        file <- B.readFile filename
+        let tree = MT.makeTree 8 file
+        putStrLn (show tree)
+        runSubCommands tl
+                       
       "run" : (filename : tl) -> do
         file <- B.readFile filename
         let tree = MT.makeTree 8 file

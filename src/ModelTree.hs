@@ -105,10 +105,14 @@ cube mt = mscale mt
 bound :: ModelTree -> Int
 bound mt = oscale mt
 
-lookupInNode offset scale x y z bits =
+bitByteOfCoord offset scale x y z =
     let bitNumber = x * scale * scale + y * scale + z in
-    let byteOffset = div (offset + bitNumber) 8 in
+    let byteOffset = offset + (quot bitNumber 8) in
     let bitOffset = mod bitNumber 8 in
+    (byteOffset, bitOffset)
+           
+lookupInNode offset scale x y z bits =
+    let (byteOffset, bitOffset) = bitByteOfCoord offset scale x y z in
     let word = B.index bits byteOffset in
     let bitValue = (shift word (bitOffset * (-1))) .&. 1 in
     bitValue /= 0
@@ -131,7 +135,10 @@ scanForFirstGrounded mt = scanForFirstGrounded_ mt (DVec 0 0 0)
 lookupTree :: DVec -> ModelTree -> Bool
 lookupTree (DVec x y z) mt =
     let
-        scale = mscale mt
+        scale =
+            case prev mt of
+              Nothing -> oscale mt
+              Just _ -> mscale mt
 
         xNode = div x scale
         yNode = div y scale
@@ -149,3 +156,29 @@ lookupTree (DVec x y z) mt =
             Just p -> lookupTree (DVec x y z) p
             Nothing -> False
 
+showSlice :: DVec -> ModelTree -> String
+showSlice dv@(DVec x y z) mt =
+    if z >= bound mt then
+        "|\n" ++ (showSlice (DVec (x+1) y 0) mt)
+    else if x >= bound mt then
+        ""
+    else if lookupTree dv mt then
+        "@@" ++ (showSlice (DVec x y (z+1)) mt)
+    else
+        "  " ++ (showSlice (DVec x y (z+1)) mt)
+            
+showSlices_ :: Int -> ModelTree -> String
+showSlices_ y mt =
+    if y >= bound mt then
+        ""
+    else
+        ("--- " ++ (show y) ++ " ---\n" ++
+                    (showSlice (DVec 0 y 0) mt) ++ "\n" ++ (showSlices_ (y+1) mt)
+        )
+                       
+showSlices :: ModelTree -> String
+showSlices mt =
+    showSlices_ 0 mt
+
+instance Show ModelTree where
+    show = showSlices
