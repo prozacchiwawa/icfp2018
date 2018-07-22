@@ -207,6 +207,26 @@ groundedShapeSet wshapes =
     in
     Set.fromList grounded
 
+newtype BasicCubeIDOrder =
+    BasicCubeIDOrder CubeID deriving (Eq, Show)
+
+basicCubeIDOrder
+    c@(BasicCubeIDOrder (CubeID (DVec cx cy cz)))
+    d@(BasicCubeIDOrder (CubeID (DVec dx dy dz))) =
+    c == d ||
+          (cy < dy) ||
+          (cy == dy && cx < dx) ||
+          (cy == dy && cx == dx && cz < dz)
+       
+instance Ord BasicCubeIDOrder where
+    (<=) = basicCubeIDOrder
+       
+cubesInBasicOrder :: Map CubeID (Map WShapeID (Set DVec)) -> [(CubeID,Map WShapeID (Set DVec))]
+cubesInBasicOrder wshapes =
+    List.sortOn
+            (\(k,v) -> BasicCubeIDOrder k)
+            (Map.toList wshapes)
+       
 getConnectome :: Map CubeID (Map WShapeID (Set DVec)) -> MT.ModelTree -> [Map WShapeID [(WShapeID,WShapeID)]]
 getConnectome wshapes mt =
     let

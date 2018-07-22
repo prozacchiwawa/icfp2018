@@ -15,63 +15,13 @@ import qualified Data.Octree as O
 
 import Types
 import Cubes
+import Codec
 import qualified ModelTree as MT
 import qualified SQLiteTest as SQL
 import qualified Region as R
 import qualified Moves as M
-    
-decodeLMove b f n =
-    let c = intcoerce (B.index f (n+1)) in
-    let sld2_a = (shift b (-6)) .&. 3 :: Int in
-    let sld1_a = (shift b (-4)) .&. 3 :: Int in
-    let sld2_i = (shift c (-4)) .&. 15 :: Int in
-    let sld1_i = (c .&. 15) :: Int in do
-      sld1 <- makeSLD sld1_a sld1_i
-      sld2 <- makeSLD sld2_a sld2_i
-      pure (n+2, LMove sld1 sld2)
-
-decodeFusionP :: Int -> B.ByteString -> Int -> Maybe (Int, TraceCommand)
-decodeFusionP b f n =
-    let datum = (shift b (-5)) .&. 7 in
-    Just (n+1, FusionP (decodeND datum))
-       
-decodeFusionS b f n =
-    let datum = (shift b (-5)) .&. 7 in
-    Just (n+1, FusionS (decodeND datum))
-       
-decodeFission b f n =
-    let idx = B.index f (n+1) in
-    let datum = (shift b (-5)) .&. 7 in
-    Just (n+2, Fission (intcoerce idx) (decodeND datum))
-       
-decodeFill b f n =
-    let datum = (shift b (-3)) .&. 31 in
-    Just (n+1, Fill (decodeND datum))
-      
-getTraceCommand :: B.ByteString -> Int -> Maybe (Int, TraceCommand)
-getTraceCommand f n =
-    let b = intcoerce (B.index f n) in
-    if b == 255 then
-        Just (n+1, Halt)
-    else if b == 254 then
-        Just (n+1, Wait)
-    else if b == 253 then
-        Just (n+1, Flip)
-    else if b .&. 15 == 4 then
-        decodeSMove b f n
-    else if b .&. 15 == 12 then
-        decodeLMove b f n
-    else if b .&. 7 == 7 then
-        decodeFusionP b f n
-    else if b .&. 7 == 6 then
-        decodeFusionS b f n
-    else if b .&. 7 == 5 then
-        decodeFission b f n
-    else if b .&. 7 == 3 then
-        decodeFill b f n
-    else
-        Nothing
-        
+import qualified CommandQ as CQ
+            
 listOutTraceCommands :: Int -> Int -> B.ByteString -> IO ()
 listOutTraceCommands n l f =
     if n >= l then do
@@ -159,20 +109,9 @@ runSubCommands args =
         let connectome = Cubes.getConnectome wshapes tree
 
         let grounded = Cubes.groundedShapeSet wshapes
-                   
+
         putStrLn ("grounded " ++ (show grounded))
         putStrLn (show connectome)
-
-      "ccr" : (filename : tl) -> do
-        file <- B.readFile filename
-        let tree = MT.makeTree 8 file
-        let c = Cubes.doCubes tree
-        let extractedCubes = List.map (\(CubeID c) -> MT.extractCube c 8 tree) (Set.toList c)
-        let shapes =
-                List.map
-                     (\c -> (c,R.getRegionLabels (R.getShapesInCube c)))
-                     extractedCubes
-        putStrLn "ccr"
                  
       "run" : (filename : (outfile : tl)) -> do
         file <- B.readFile filename
@@ -193,6 +132,50 @@ runSubCommands args =
         returnHome finLoc
 -}
         runSubCommands tl
+
+      -- Time to finish at least one strategy completely
+      "type1" : (filename : tl) -> do
+        file <- B.readFile filename
+        let tree = MT.makeTree 8 file
+        let c = Cubes.doCubes tree
+        let extractedCubes =
+                List.foldl
+                        (\m (CubeID c) ->
+                             Map.insert
+                                (CubeID c)
+                                (MT.extractCube c 8 tree)
+                                m
+                        )
+                        Map.empty
+                        (Set.toList c)
+        let shapes =
+                Map.mapWithKey
+                     (\k v ->
+                          let
+                              regions = R.getShapesInCube v
+                              shapes = R.shapeFromRegions regions v
+                          in
+                          shapes
+                     )
+                     extractedCubes
+
+        let wshapes = getWorldShapes shapes
+        let emt = MT.emptyTree 8 (MT.bound tree)
+        let cubes = Cubes.cubesInBasicOrder wshapes
+        let moves =
+                List.foldl
+                        (\(last,cmds) (ci,csh) ->
+                             let
+                                 (l,c) =
+                                     CQ.backupPaintCube 8 ci csh (DVec 0 0 0) emt tree
+                             in
+                             (l, cmds ++ c)
+                        )
+                        (DVec 0 0 0, [])
+                        cubes
+        putStrLn (show moves)
+        runSubCommands tl
+        
 
       "sqlite-test" : (filename : tl) -> do
         SQL.runDB

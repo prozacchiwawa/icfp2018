@@ -80,3 +80,11 @@ data ShapeID = ShapeID DVec deriving (Ord, Eq, Show)
 data WShapeID = WShapeID DVec deriving (Ord, Eq, Show)
 data CubeID = CubeID DVec deriving (Ord, Eq, Show)
              
+(|>) :: a -> (a -> b) -> b
+(|>) x f = f x
+infixl 0 |>
+
+optionDefault d v =
+    case v of
+      Just v -> v
+      Nothing -> d
