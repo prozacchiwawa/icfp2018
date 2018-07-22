@@ -13,7 +13,7 @@ import qualified ModelTree as MT
 
 simplePlotVoxels :: DVec -> [DVec] -> MT.ModelTree -> (DVec, [TraceCommand])
 simplePlotVoxels at@(DVec x y z) voxels mt =
-    case voxels of
+    case trace ("at " ++ (show at) ++ " voxels " ++ (show voxels)) voxels of
       hd@(DVec hx hy hz) : tl ->
           if hz == z then
               let (next, cmds) = simplePlotVoxels at tl mt in
@@ -44,11 +44,10 @@ simplePlotRow n ci dv@(DVec x y z) voxels mt =
                 z + n - 1
         plots = List.sort voxels
     in
-    
     simplePlotVoxels dv plots mt
 
-simplePlotPlanes :: Int -> CubeID -> DVec -> Set DVec -> MT.ModelTree -> (DVec, [TraceCommand])
-simplePlotPlanes n ci@(CubeID cvec@(DVec cx cy cz)) dv@(DVec x y z) voxels mt =
+simplePlotPlane :: Int -> CubeID -> DVec -> Set DVec -> MT.ModelTree -> (DVec, [TraceCommand])
+simplePlotPlane n ci@(CubeID cvec@(DVec cx cy cz)) dv@(DVec x y z) voxels mt =
     let
         bound = MT.bound mt
         maxx x =
@@ -56,56 +55,98 @@ simplePlotPlanes n ci@(CubeID cvec@(DVec cx cy cz)) dv@(DVec x y z) voxels mt =
                 bound - 1
             else
                 x + n - 1
+
         rows =
             List.filter
                 (\row -> Set.size row > 0)
                 (List.map
-                         (\x -> Set.filter (\(DVec dx dy dz) -> dx == x+1 && dy == y) voxels)
-                         [x .. (maxx (x - (mod x n)))]
+                         (\x -> Set.filter (\(DVec dx dy dz) -> dx == (trace ("simplePlotPlane x " ++ (show x) ++ " vs " ++ (show dx)) x)) (trace ("simplePlotPlane " ++ (show voxels)) voxels))
+                         [(x+cx) .. (maxx ((x+cx) - (mod x n)))]
                 )
     in
     List.foldl
         (\(last, commands) row ->
             let
-                firstOfRow =
+                (DVec fx fy fz) =
                     case Set.toList row of
                       hd : tl -> hd
                       _ -> (DVec (x+1) y z)
                            
-                move =
-                    case fmap (pathCommands last) (M.createPathThroughSpace mt last firstOfRow) of
+                (toward, move) =
+                    case fmap (pathCommands last) (M.createPathThroughSpace mt last (DVec fx (fy+1) fz)) of
                       Just a -> a
-                      Nothing -> []
+                      Nothing -> (last, [])
 
-                (l,c) = simplePlotRow n ci dv (Set.toList row) mt
+                (l,c) = simplePlotRow n ci toward (trace ("simplePlotRow " ++ (show row)) (Set.toList row)) mt
             in
             (l, commands ++ move ++ c)
         )
         (dv, [])
-        rows
+        rows    
+      
+simplePlotPlanes :: Int -> CubeID -> DVec -> Set DVec -> MT.ModelTree -> (DVec, [TraceCommand])
+simplePlotPlanes n ci@(CubeID cvec@(DVec cx cy cz)) dv@(DVec x y z) voxels mt =
+    let
+        bound = MT.bound mt
+        maxy y =
+            if y + n >= bound then
+                bound - 1
+            else
+                y + n - 1
+
+        planes =
+            List.filter
+                    (\plane -> Set.size plane > 0)
+                    (List.map
+                             (\y -> Set.filter (\(DVec dx dy dz) -> dy == y) voxels)
+                             [0 .. (maxy (y - (mod y n)))]
+                    )
+    in
+    List.foldl
+        (\(last,commands) plane ->
+            let
+                firstOfPlane = DVec x (y+1) z
+                (toward, move) =
+                    case fmap (pathCommands last) (M.createPathThroughSpace mt last firstOfPlane) of
+                      Just a -> a
+                      Nothing -> (last, [])
+
+                (l,c) = simplePlotPlane n ci toward (trace ("plane " ++ (show plane)) plane) mt
+            in
+            (l, commands ++ move ++ c)
+        )
+        (dv, [])
+        planes
     
 {- Given a point list, make a trace list 
  - For now just emit a series of SMove
  -}
 pathCommands at@(DVec ax ay az) ptlist =
-    case ptlist of
-      [] -> []
+    case (trace ("at " ++ (show at) ++ " pathCommands " ++ (show ptlist)) ptlist) of
+      [] -> (at, [])
       hd@(DVec hx hy hz) : tl ->
+          let (last, path) = pathCommands hd tl in
           if hx /= ax then
-              List.concat
-                      [ [ SMove (LLD X (hx - ax)) ]
-                      , pathCommands hd tl
-                      ]
+              (last
+              , List.concat
+                    [ [ SMove (LLD X (hx - ax)) ]
+                    , path
+                    ]
+              )
           else if hy /= ay then
-              List.concat
-                      [ [ SMove (LLD Y (hy - ay)) ]
-                      , pathCommands hd tl
-                      ]
+              (last
+              , List.concat
+                    [ [ SMove (LLD Y (hy - ay)) ]
+                    , path
+                    ]
+               )
           else if hz /= az then
-              List.concat
-                      [ [ SMove (LLD Z (hz - az)) ]
-                      , pathCommands hd tl
-                      ]
+              (last
+              , List.concat
+                    [ [ SMove (LLD Z (hz - az)) ]
+                    , path
+                    ]
+               )
           else
               pathCommands at tl
     
@@ -121,26 +162,27 @@ backupPaintCube n ci@(CubeID cvec@(DVec cx cy cz)) shapes whereWas@(DVec x y z) 
                 (y - (mod y n)) + n
             else
                 (y - (mod y n)) + (n - 1)
+        slice = MT.extractCube cvec n mt
         (DVec fx fy fz) =
-            fmap (\dv -> addVec dv cvec) (MT.scanForFirstGrounded cmt)
-            |> optionDefault (DVec 0 (y+1) 0)
+            fmap (\dv -> addVec dv cvec) (MT.scanForFirstGrounded slice)
+            |> optionDefault (DVec cx (cy+1) cz)
         aboveLocation = DVec x (yAbove y) z
         aboveOtherCubeLocation = DVec fx (yAbove fy) fz
-        startPlottingLocation = DVec fx (fy+1) fz
-        pathToAboveThisCube =
+        startPlottingLocation = DVec fx fy fz
+        (ptaLast, pathToAboveThisCube) =
             fmap (pathCommands whereWas)
-                (M.createPathThroughSpace mt whereWas aboveLocation)
-            |> optionDefault []
-        pathToTargetCube =
+                (M.createPathThroughSpace mt whereWas (trace ("aboveLocation " ++ (show aboveLocation)) aboveLocation))
+            |> optionDefault (whereWas, [])
+        (pttLast, pathToTargetCube) =
             fmap (pathCommands aboveLocation)
-                (M.createPathThroughSpace mt aboveLocation aboveOtherCubeLocation)
-            |> optionDefault []
-        pathToStartOfPlotting =
+                (M.createPathThroughSpace mt ptaLast (trace ("aboveOtherCubeLocation " ++ (show aboveOtherCubeLocation)) aboveOtherCubeLocation))
+            |> optionDefault (ptaLast, [])
+        (ptsLast, pathToStartOfPlotting) =
             fmap (pathCommands aboveOtherCubeLocation)
-                (M.createPathThroughSpace mt aboveOtherCubeLocation startPlottingLocation)
-            |> optionDefault []
+                (M.createPathThroughSpace mt pttLast (trace ("startPlottingLocation " ++ (show startPlottingLocation)) startPlottingLocation))
+            |> optionDefault (pttLast, [])
         allVoxels = Map.foldl Set.union Set.empty shapes
-        (last, afterPlot) = simplePlotPlanes n ci startPlottingLocation allVoxels mt
+        (last, afterPlot) = simplePlotPlanes n ci ptsLast (trace ("allVoxels " ++ (show allVoxels)) allVoxels) cmt
     in
     ( last
     , List.concat

@@ -134,7 +134,7 @@ runSubCommands args =
         runSubCommands tl
 
       -- Time to finish at least one strategy completely
-      "type1" : (filename : tl) -> do
+      "type1" : (filename : (outf : tl)) -> do
         file <- B.readFile filename
         let tree = MT.makeTree 8 file
         let c = Cubes.doCubes tree
@@ -162,20 +162,28 @@ runSubCommands args =
         let wshapes = getWorldShapes shapes
         let emt = MT.emptyTree 8 (MT.bound tree)
         let cubes = Cubes.cubesInBasicOrder wshapes
-        let moves =
+        let (lastPos, moves) =
                 List.foldl
                         (\(last,cmds) (ci,csh) ->
                              let
                                  (l,c) =
-                                     CQ.backupPaintCube 8 ci csh (DVec 0 0 0) emt tree
+                                     CQ.backupPaintCube 8 (trace ("cube " ++ (show ci)) ci) csh last emt tree
                              in
                              (l, cmds ++ c)
                         )
                         (DVec 0 0 0, [])
                         cubes
-        putStrLn (show moves)
+        let (finAt, finalPath) =
+                fmap
+                    (CQ.pathCommands lastPos)
+                    (M.createPathThroughSpace tree lastPos (DVec 0 0 0))
+                |> optionDefault (lastPos, [])
+                    
+        let moveres =
+                List.concat [ [Flip], moves, [Flip], finalPath, [Halt] ]
+
+        B.writeFile outf (encodeTraceCommands moveres)
         runSubCommands tl
-        
 
       "sqlite-test" : (filename : tl) -> do
         SQL.runDB
