@@ -64,7 +64,7 @@ simplePlotPlane n ci@(CubeID cvec@(DVec cx cy cz)) dv@(DVec x y z) voxels mt =
                 (\row -> Set.size row > 0)
                 (List.map
                          (\x -> Set.filter (\(DVec dx dy dz) -> dx == x) voxels)
-                         [(x+cx) .. (maxx ((x+cx) - (mod x n)))]
+                         [x .. (maxx (x - (mod x n)))]
                 )
     in
     List.foldl
