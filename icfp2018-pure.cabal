@@ -62,7 +62,8 @@ executable icfp2018-pure
                        containers >= 0.5.6.2,
                        linear >= 1.20.7,
                        Octree >= 0.6.0.0,
-                       sqlite-simple >= 0.4.16.0
+                       sqlite-simple >= 0.4.16.0,
+                       ghc >= 7.10.3
 
   -- Directories containing source files.
   hs-source-dirs:      src

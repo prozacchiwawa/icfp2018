@@ -2,6 +2,7 @@ module ModelTree where
 
 import Data.Bits
 import Data.Word
+import qualified Data.List as List
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 import qualified Data.Maybe as Maybe
@@ -181,6 +182,26 @@ showSlices :: ModelTree -> String
 showSlices mt =
     showSlices_ 0 mt
 
+{- Get the possible neighboring moves from here -}
+neighborMoves :: ModelTree -> DVec -> [DVec]
+neighborMoves mt at@(DVec x y z) =
+    let
+        bounds = bound mt
+        toLeft =  DVec (x-1) y     z
+        toRight = DVec (x+1) y     z
+        below =   DVec x     (y-1) z
+        above =   DVec x     (y+1) z
+        ahead =   DVec x     y     (z-1)
+        behind =  DVec x     y     (z+1)
+        possible = [ toLeft, toRight, above, below, ahead, behind ]
+    in
+    List.filter
+        (\at@(DVec x y z) ->
+             x >= 0 && y >= 0 && z >= 0 &&
+             x < bounds && y < bounds && z < bounds
+        )
+        possible
+
 extractCube :: DVec -> Int -> ModelTree -> ModelTree
 extractCube start newsize mt =
     ModelTree
@@ -190,6 +211,20 @@ extractCube start newsize mt =
     , offset = 0
     , tree = O.fromList []
     }
-              
+
+foldZXY_ dv@(DVec x y z) f a mt =
+    let bounds = bound mt in
+    if y > bounds then
+        a
+    else if z > bounds then
+        foldZXY_ (DVec (x+1) y 0) f a mt
+    else if x > bounds then
+        foldZXY_ (DVec 0 (y+1) 0) f a mt
+    else
+        foldZXY_ (DVec x y (z+1)) f (f dv a) mt
+
+foldZXY f a mt =
+    foldZXY_ (DVec 0 0 0) f a mt
+           
 instance Show ModelTree where
     show = showSlices

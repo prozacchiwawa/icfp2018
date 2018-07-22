@@ -45,6 +45,14 @@ decodeND datum =
     let x = mod (div xy 3) 3 :: Int in
     ND (x - 1) (y - 1) (z - 1)
 
+addVec :: DVec -> DVec -> DVec
+addVec a@(DVec ax ay az) b@(DVec bx by bz) =
+    DVec (ax+bx) (ay+by) (az+bz)
+
+subVec :: DVec -> DVec -> DVec
+subVec a@(DVec ax ay az) b@(DVec bx by bz) =
+    DVec (ax-bx) (ay-by) (az-bz)
+         
 decodeSMove :: Int -> B.ByteString -> Int -> Maybe (Int, TraceCommand)
 decodeSMove b f n =
     let c = B.index f (n+1) in
@@ -56,3 +64,15 @@ decodeSMove b f n =
 intcoerce :: Word8 -> Int
 intcoerce a =
     fromInteger (toInteger a)
+
+nextPlane :: Axis -> Int -> DVec -> DVec
+nextPlane axis n dv@(DVec x y z) =
+    case axis of
+      X -> DVec (x+n) y z
+      Y -> DVec x (y+n) z
+      Z -> DVec x y (z+n)
+
+manhattanDistance :: DVec -> DVec -> Int
+manhattanDistance (DVec sx sy sz) (DVec ex ey ez) =
+    (abs (ex - sx)) + (abs (ey - sy)) + (abs (ez - sz))
+

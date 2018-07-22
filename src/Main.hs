@@ -2,7 +2,9 @@ module Main where
 
 import Data.Bits
 import Data.Word
-import qualified Data.Maybe as Maybe    
+import qualified Data.Maybe as Maybe
+import qualified Data.Map as Map
+import Data.Map (Map)
 import qualified Data.ByteString as B
 import qualified System.Environment as SysEnv
 import qualified Data.Octree as O
@@ -11,6 +13,7 @@ import Types
 import Cubes
 import qualified ModelTree as MT
 import qualified SQLiteTest as SQL
+import qualified Moves as M
     
 decodeLMove b f n =
     let c = intcoerce (B.index f (n+1)) in
@@ -97,7 +100,7 @@ runSubCommands args =
         let x = read xstr :: Int
         let y = read ystr :: Int
         let z = read zstr :: Int
-        let p = createPathThroughSpace tree (DVec x y z) (DVec 0 0 0)
+        let p = M.createPathThroughSpace tree (DVec x y z) (DVec 0 0 0)
         putStrLn ("path " ++ (show p))
 
       "findPath2" : (filename : (sxstr : (systr : (szstr : (exstr : (eystr : (ezstr : tl))))))) -> do
@@ -109,9 +112,16 @@ runSubCommands args =
         let ex = read exstr :: Int
         let ey = read eystr :: Int
         let ez = read ezstr :: Int
-        let p = createPathThroughSpace tree (DVec sx sy sz) (DVec ex ey ez)
+        let p = M.createPathThroughSpace tree (DVec sx sy sz) (DVec ex ey ez)
         putStrLn ("path " ++ (show p))
-                       
+
+      "test-region" : (filename : tl) -> do
+        file <- B.readFile filename
+        let tree = MT.makeTree 8 file
+        let rgns = M.getShapesInCube tree
+        let labels = M.getRegionLabels rgns
+        putStrLn ("rgns " ++ (show labels))
+
       "run" : (filename : (outfile : tl)) -> do
         file <- B.readFile filename
         let tree = MT.makeTree 8 file
