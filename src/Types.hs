@@ -76,3 +76,7 @@ manhattanDistance :: DVec -> DVec -> Int
 manhattanDistance (DVec sx sy sz) (DVec ex ey ez) =
     (abs (ex - sx)) + (abs (ey - sy)) + (abs (ez - sz))
 
+data ShapeID = ShapeID DVec deriving (Ord, Eq, Show)
+data WShapeID = WShapeID DVec deriving (Ord, Eq, Show)
+data CubeID = CubeID DVec deriving (Ord, Eq, Show)
+             

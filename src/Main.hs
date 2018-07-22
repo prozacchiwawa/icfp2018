@@ -135,9 +135,9 @@ runSubCommands args =
         let c = Cubes.doCubes tree
         let extractedCubes =
                 List.foldl
-                        (\m c ->
+                        (\m (CubeID c) ->
                              Map.insert
-                                c
+                                (CubeID c)
                                 (MT.extractCube c 8 tree)
                                 m
                         )
@@ -154,29 +154,20 @@ runSubCommands args =
                      )
                      extractedCubes
 
-        let wshapes =
-                Map.mapWithKey
-                   (\k v ->
-                        Cubes.mapShapesToWorldSpace (trace ("k " ++ (show k)) k) v
-                   )
-                   shapes
+        let wshapes = getWorldShapes shapes
+
+        let connectome = Cubes.getConnectome wshapes tree
+
+        let grounded = Cubes.groundedShapeSet wshapes
                    
-        putStrLn
-            ("grounded " ++
-             (show
-              (Map.mapWithKey
-                      (\k v -> Cubes.groundedShapes v)
-                      wshapes
-              )
-             )
-            )
-        putStrLn (show wshapes)
+        putStrLn ("grounded " ++ (show grounded))
+        putStrLn (show connectome)
 
       "ccr" : (filename : tl) -> do
         file <- B.readFile filename
         let tree = MT.makeTree 8 file
         let c = Cubes.doCubes tree
-        let extractedCubes = List.map (\c -> MT.extractCube c 8 tree) (Set.toList c)
+        let extractedCubes = List.map (\(CubeID c) -> MT.extractCube c 8 tree) (Set.toList c)
         let shapes =
                 List.map
                      (\c -> (c,R.getRegionLabels (R.getShapesInCube c)))

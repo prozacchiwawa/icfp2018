@@ -11,19 +11,19 @@ import Types
 import qualified ModelTree as MT
 
 {- Given a modeltree, make a map where each full voxel DV contains itself in the map. -}
-initForShapeFinding :: MT.ModelTree -> Map DVec DVec
+initForShapeFinding :: MT.ModelTree -> Map DVec ShapeID
 initForShapeFinding mt =
     MT.foldZXY
       (\dv a ->
            if MT.lookupTree dv mt then
-               Map.insert dv dv a
+               Map.insert dv (ShapeID dv) a
            else
                a
       )
       Map.empty
       mt
 
-getShapesInCube_ :: Map DVec DVec -> MT.ModelTree -> Map DVec DVec
+getShapesInCube_ :: Map DVec ShapeID -> MT.ModelTree -> Map DVec ShapeID
 getShapesInCube_ m mt =
     MT.foldZXY
       (\dv m ->
@@ -39,13 +39,13 @@ getShapesInCube_ m mt =
                            (\a ->
                                 case Map.lookup a m of
                                   Just a -> a
-                                  Nothing -> a
+                                  Nothing -> (ShapeID a)
                            )
                        neighborhood
 
                bestNeighbor =
                    case neighborhoodBelongsTo of
-                     [] -> dv
+                     [] -> (ShapeID dv)
                      _ -> minimum neighborhoodBelongsTo
            in
            List.foldl
@@ -58,7 +58,7 @@ getShapesInCube_ m mt =
       m
       mt
 
-getShapesInCube :: MT.ModelTree -> Map DVec DVec
+getShapesInCube :: MT.ModelTree -> Map DVec ShapeID
 getShapesInCube mt = do
     let sinit = initForShapeFinding mt
     untilSame (==) (\m -> getShapesInCube_ m mt) sinit
@@ -70,7 +70,7 @@ getShapesInCube mt = do
           else
               untilSame sameValues makeNewMap newMap
 
-getRegionLabels :: Map DVec DVec -> Set DVec
+getRegionLabels :: Map DVec ShapeID -> Set ShapeID
 getRegionLabels m =
     Set.fromList (List.map (\(x,y) -> y) (Map.toList m))
 
