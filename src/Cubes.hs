@@ -7,6 +7,8 @@ import qualified Data.List as List
 import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
 import Data.Set (Set)
+import qualified Data.Map as Map
+import Data.Map (Map)
 import qualified Data.ByteString as B
 import qualified System.Environment as SysEnv
 import qualified Data.Octree as O
@@ -45,3 +47,33 @@ doCubes :: MT.ModelTree -> Set DVec
 doCubes mt =
     doCubes_ Set.empty Set.insert (DVec 0 0 0) mt
 
+neighborCubes :: DVec -> Int -> MT.ModelTree -> [DVec]
+neighborCubes dv@(DVec x y z) s mt =
+    let
+        bounds = MT.bound mt
+        toLeft =  DVec (x-s) y     z
+        toRight = DVec (x+s) y     z
+        below =   DVec x     (y-s) z
+        above =   DVec x     (y+s) z
+        ahead =   DVec x     y     (z-s)
+        behind =  DVec x     y     (z+s)
+        possible = [ toLeft, toRight, above, below, ahead, behind ]
+    in
+    List.filter
+        (\at@(DVec x y z) ->
+             x >= 0 && y >= 0 && z >= 0 &&
+             x < bounds && y < bounds && z < bounds
+        )
+        possible
+
+{- Find the grounded shapes -}
+groundedShapes :: Map DVec (Set DVec) -> Map DVec Bool
+groundedShapes shapes =
+    Map.mapWithKey
+       (\k v ->
+            (List.filter
+                (\dv@(DVec x y z) -> y == 0)
+                (Set.toList v))
+            /= []
+       )
+       shapes

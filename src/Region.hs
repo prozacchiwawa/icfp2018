@@ -74,3 +74,15 @@ getRegionLabels :: Map DVec DVec -> Set DVec
 getRegionLabels m =
     Set.fromList (List.map (\(x,y) -> y) (Map.toList m))
 
+
+{- Turn the recovered regions into sets of DVec -}
+shapeFromRegions shapes mt =
+    let allAssocs = Map.toList shapes in
+    List.foldl
+        (\m (k,v) ->
+             case Map.lookup v m of
+               Just s -> Map.insert v (Set.insert k s) m
+               Nothing -> Map.insert v (Set.insert k Set.empty) m
+        )
+        Map.empty
+        allAssocs

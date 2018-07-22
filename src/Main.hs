@@ -125,8 +125,45 @@ runSubCommands args =
         let rgns = R.getShapesInCube tree
         let labels = R.getRegionLabels rgns
         putStrLn ("rgns " ++ (show labels))
+        let shapes = R.shapeFromRegions rgns tree
+        putStrLn ("shapes " ++ (show shapes))
 
       "cube-regions" : (filename : tl) -> do
+        file <- B.readFile filename
+        let tree = MT.makeTree 8 file
+        let c = Cubes.doCubes tree
+        let extractedCubes =
+                List.foldl
+                        (\m c ->
+                             Map.insert
+                                c
+                                (MT.extractCube c 8 tree)
+                                m
+                        )
+                        Map.empty
+                        (Set.toList c)
+        let shapes =
+                Map.mapWithKey
+                     (\k v ->
+                          let
+                              regions = R.getShapesInCube v
+                              shapes = R.shapeFromRegions regions v
+                          in
+                          shapes
+                     )
+                     extractedCubes
+        putStrLn
+            ("grounded " ++
+             (show
+              (Map.mapWithKey
+                      (\k v -> Cubes.groundedShapes v)
+                      shapes
+              )
+             )
+            )
+        putStrLn (show shapes)
+
+      "ccr" : (filename : tl) -> do
         file <- B.readFile filename
         let tree = MT.makeTree 8 file
         let c = Cubes.doCubes tree
@@ -135,7 +172,7 @@ runSubCommands args =
                 List.map
                      (\c -> (c,R.getRegionLabels (R.getShapesInCube c)))
                      extractedCubes
-        putStrLn (show shapes)
+        putStrLn "ccr"
                  
       "run" : (filename : (outfile : tl)) -> do
         file <- B.readFile filename
