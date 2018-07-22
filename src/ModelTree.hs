@@ -214,11 +214,11 @@ extractCube start newsize mt =
 
 foldZXY_ dv@(DVec x y z) f a mt =
     let bounds = bound mt in
-    if y > bounds then
+    if y >= bounds then
         a
-    else if z > bounds then
+    else if z >= bounds then
         foldZXY_ (DVec (x+1) y 0) f a mt
-    else if x > bounds then
+    else if x >= bounds then
         foldZXY_ (DVec 0 (y+1) 0) f a mt
     else
         foldZXY_ (DVec x y (z+1)) f (f dv a) mt

@@ -1,5 +1,6 @@
 module Cubes where
 
+import Debug.Trace
 import Data.Bits
 import Data.Word
 import qualified Data.List as List
@@ -13,18 +14,17 @@ import qualified Data.Octree as O
 import Types
 import qualified ModelTree as MT
 
-isNonEmptyCube startDv@(DVec sx sy sz) dv@(DVec x y z) mt =
-    let step = MT.cube mt in
-    if z >= sz + step then
-        isNonEmptyCube startDv (DVec (x+1) y 0) mt
-    else if x >= sx + step then
-        isNonEmptyCube startDv (DVec 0 (y+1) 0) mt
-    else if y >= sy + step then
+isNonEmptyCube startDv size mt =
+    let extracted = MT.extractCube startDv size mt in
+    MT.foldZXY
+        (\dv a ->
+             if MT.lookupTree dv extracted then
+                 True
+             else
+                 a
+        )
         False
-    else if MT.lookupTree dv mt then
-        True
-    else
-        isNonEmptyCube startDv (DVec x y (z+1)) mt
+        extracted
     
 doCubes_ acc f dv@(DVec x y z) mt =
     let n = MT.bound mt in
@@ -36,7 +36,7 @@ doCubes_ acc f dv@(DVec x y z) mt =
         doCubes_ acc f (DVec 0 (y+s) 0) mt
     else if y >= n then
         acc
-    else if isNonEmptyCube dv dv mt then
+    else if isNonEmptyCube dv s mt then
         doCubes_ (f dv acc) f u mt
     else
         doCubes_ acc f u mt

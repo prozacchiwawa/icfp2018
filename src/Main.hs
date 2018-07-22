@@ -2,9 +2,12 @@ module Main where
 
 import Data.Bits
 import Data.Word
+import qualified Data.List as List
 import qualified Data.Maybe as Maybe
 import qualified Data.Map as Map
 import Data.Map (Map)
+import qualified Data.Set as Set
+import Data.Set (Set)
 import qualified Data.ByteString as B
 import qualified System.Environment as SysEnv
 import qualified Data.Octree as O
@@ -13,6 +16,7 @@ import Types
 import Cubes
 import qualified ModelTree as MT
 import qualified SQLiteTest as SQL
+import qualified Region as R
 import qualified Moves as M
     
 decodeLMove b f n =
@@ -118,10 +122,21 @@ runSubCommands args =
       "test-region" : (filename : tl) -> do
         file <- B.readFile filename
         let tree = MT.makeTree 8 file
-        let rgns = M.getShapesInCube tree
-        let labels = M.getRegionLabels rgns
+        let rgns = R.getShapesInCube tree
+        let labels = R.getRegionLabels rgns
         putStrLn ("rgns " ++ (show labels))
 
+      "cube-regions" : (filename : tl) -> do
+        file <- B.readFile filename
+        let tree = MT.makeTree 8 file
+        let c = Cubes.doCubes tree
+        let extractedCubes = List.map (\c -> MT.extractCube c 8 tree) (Set.toList c)
+        let shapes =
+                List.map
+                     (\c -> (c,R.getRegionLabels (R.getShapesInCube c)))
+                     extractedCubes
+        putStrLn (show shapes)
+                 
       "run" : (filename : (outfile : tl)) -> do
         file <- B.readFile filename
         let tree = MT.makeTree 8 file
