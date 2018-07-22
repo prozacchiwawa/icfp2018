@@ -17,11 +17,14 @@ simplePlotVoxels at@(DVec x y z) voxels mt =
       hd@(DVec hx hy hz) : tl ->
           if hx == x && hy == y - 1 && hz == z then
               let (next, cmds) = simplePlotVoxels at tl mt in
+              let allCommands =
+                      List.concat
+                              [ [Fill (ND 0 (-1) 0)]
+                              , cmds
+                              ]
+              in
               ( next
-              , List.concat
-                    [ [Fill (ND 0 (-1) 0)]
-                    , cmds
-                    ]
+              , trace ("at " ++ (show at) ++ " fill " ++ (show allCommands)) allCommands
               )
           else
               let
@@ -64,7 +67,7 @@ simplePlotPlane n ci@(CubeID cvec@(DVec cx cy cz)) dv@(DVec x y z) voxels mt =
                 (\row -> Set.size row > 0)
                 (List.map
                          (\x -> Set.filter (\(DVec dx dy dz) -> dx == x) voxels)
-                         [x .. (maxx (x - (mod x n)))]
+                         [cx .. (maxx (x - (mod x n)))]
                 )
     in
     List.foldl
