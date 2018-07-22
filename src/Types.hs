@@ -3,6 +3,10 @@ module Types where
 import Data.Bits
 import Data.Word
 import qualified Data.Maybe as Maybe
+import qualified Data.Map as Map
+import Data.Map (Map)
+import qualified Data.Set as Set
+import Data.Set (Set)
 import qualified Data.ByteString as B
 
 data Axis = X | Y | Z deriving (Eq, Show)
@@ -24,6 +28,9 @@ data TraceCommand
     | FusionP ND
     | FusionS ND deriving (Eq, Show)
       
+data ConnectomeTree = ConnectomeTree WShapeID [ConnectomeTree] deriving (Ord, Show, Eq)
+data Connectome = Connectome ([Map WShapeID [(WShapeID,WShapeID)]]) deriving (Ord, Show, Eq)
+
 addVec :: DVec -> DVec -> DVec
 addVec a@(DVec ax ay az) b@(DVec bx by bz) =
     DVec (ax+bx) (ay+by) (az+bz)

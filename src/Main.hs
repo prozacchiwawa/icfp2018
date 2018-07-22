@@ -112,6 +112,52 @@ runSubCommands args =
 
         putStrLn ("grounded " ++ (show grounded))
         putStrLn (show connectome)
+
+        runSubCommands tl
+
+      "skeleton" : (filename : (outfile : tl)) -> do
+        file <- B.readFile filename
+        let tree = MT.makeTree 8 file
+        let c = Cubes.doCubes tree
+        let extractedCubes =
+                List.foldl
+                        (\m (CubeID c) ->
+                             Map.insert
+                                (CubeID c)
+                                (MT.extractCube c 8 tree)
+                                m
+                        )
+                        Map.empty
+                        (Set.toList c)
+        let shapes =
+                Map.mapWithKey
+                     (\k v ->
+                          let
+                              regions = R.getShapesInCube v
+                              shapes = R.shapeFromRegions regions v
+                          in
+                          shapes
+                     )
+                     extractedCubes
+
+        let wshapes = getWorldShapes shapes
+
+        let connectome = Cubes.getConnectome wshapes tree
+
+        let grounded = Cubes.groundedShapeSet wshapes
+
+        putStrLn ("grounded " ++ (show grounded))
+        putStrLn ("connectome " ++ (show connectome))
+
+        let shapeID = WShapeID (DVec 8 0 7)
+                 
+        let neighborShapes = Cubes.neighborShapes shapeID connectome
+        putStrLn ("neighbors of " ++ (show shapeID) ++ " " ++ (show neighborShapes))
+
+        let ct = pathThroughShapes grounded connectome
+        putStrLn ("paths " ++ (show ct))
+                 
+        runSubCommands tl
                  
       "run" : (filename : (outfile : tl)) -> do
         file <- B.readFile filename

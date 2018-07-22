@@ -227,7 +227,7 @@ cubesInBasicOrder wshapes =
             (\(k,v) -> BasicCubeIDOrder k)
             (Map.toList wshapes)
        
-getConnectome :: Map CubeID (Map WShapeID (Set DVec)) -> MT.ModelTree -> [Map WShapeID [(WShapeID,WShapeID)]]
+getConnectome :: Map CubeID (Map WShapeID (Set DVec)) -> MT.ModelTree -> Connectome
 getConnectome wshapes mt =
     let
         connectomeRaw =
@@ -244,4 +244,66 @@ getConnectome wshapes mt =
                     )
                     (Map.toList wshapes)
     in
-    List.filter (\m -> (Map.size m) > 0) (List.concat (List.concat connectomeRaw))
+    Connectome
+      (List.filter (\m -> (Map.size m) > 0) (List.concat (List.concat connectomeRaw)))
+
+neighborShapes :: WShapeID -> Connectome -> Set WShapeID
+neighborShapes shape (Connectome connectome) =
+    List.foldl
+        Set.union
+        Set.empty
+        (List.map smallNeighborShapes connectome)
+    where
+    smallNeighborShapes m =
+        case Map.lookup shape m of
+          Just plist -> Set.fromList (List.map (\(_,v) -> v) plist)
+          Nothing -> Set.empty
+
+setOfConnectome :: ConnectomeTree -> Set WShapeID
+setOfConnectome (ConnectomeTree shp lst) =
+    List.foldl
+        (\a b -> Set.union a (setOfConnectome b))
+        (Set.singleton shp)
+        lst
+
+accumBranches ::
+    ConnectomeTree ->
+    Set WShapeID ->
+    [WShapeID] ->
+    Connectome ->
+    ConnectomeTree
+accumBranches ct@(ConnectomeTree here branches) used ls connectome =
+    case ls of
+      [] -> ct
+      hd : tl ->
+          let
+              newUsed = Set.union used (setOfConnectome ct)
+              newConnectome = pathThroughShapes_ hd newUsed connectome :: ConnectomeTree
+          in
+          accumBranches
+              (ConnectomeTree here ([newConnectome] ++ branches))
+              newUsed
+              tl
+              connectome
+
+pathThroughShapes_ ::
+    WShapeID ->
+    Set WShapeID ->
+    Connectome ->
+    ConnectomeTree
+pathThroughShapes_ at used connectome =
+    let
+        neighbors = neighborShapes at connectome
+        firstFront = Set.toList (Set.difference neighbors used)
+    in
+    case firstFront of
+      [] -> ConnectomeTree at []
+      ls -> accumBranches (ConnectomeTree at []) used ls connectome
+
+pathThroughShapes :: Set WShapeID -> Connectome -> ConnectomeTree
+pathThroughShapes grounded connectome =
+    accumBranches 
+        (ConnectomeTree (WShapeID (DVec 0 0 0)) [])
+        Set.empty
+        (Set.toList grounded)
+        connectome

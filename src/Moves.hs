@@ -11,15 +11,15 @@ import qualified ModelTree as MT
 
 {- Path through space given tree object that specifies the taken elements in the space.
  -}
-createPathThroughSpace_ :: MT.ModelTree -> [DVec] -> Set DVec -> DVec -> DVec -> Maybe [DVec]
-createPathThroughSpace_ mt res resSet start end =
+createPathThroughSpace_ :: (DVec -> Bool) -> MT.ModelTree -> [DVec] -> Set DVec -> DVec -> DVec -> Maybe [DVec]
+createPathThroughSpace_ suitable mt res resSet start end =
     if start == end then
         Just res
     else
         let
             moves =
                 List.filter
-                        (\at -> not (MT.lookupTree at mt) && not (Set.member at resSet))
+                        (\at -> (suitable at) && not (Set.member at resSet))
                         (MT.neighborMoves mt start)
             sorted =
                 List.sort
@@ -36,7 +36,7 @@ createPathThroughSpace_ mt res resSet start end =
               Nothing
             hd : tl ->
                 let newResSet = Set.insert hd resSet in
-                case createPathThroughSpace_ mt (hd : res) newResSet hd end of
+                case createPathThroughSpace_ suitable mt (hd : res) newResSet hd end of
                   Just path ->
                       Just path
                   Nothing ->
@@ -49,4 +49,19 @@ createPathThroughSpace mt start end =
     else
         fmap
             List.reverse
-            (createPathThroughSpace_ mt [] (Set.insert start Set.empty) start end)
+            (createPathThroughSpace_
+               (\at -> not (MT.lookupTree at mt))
+               mt [] (Set.insert start Set.empty) start end
+            )
+
+createPathThroughMatter :: MT.ModelTree -> DVec -> DVec -> Maybe [DVec]
+createPathThroughMatter mt start end =
+    if MT.lookupTree end mt || MT.lookupTree start mt then
+        Nothing
+    else
+        fmap
+            List.reverse
+            (createPathThroughSpace_
+                (\at -> MT.lookupTree at mt)
+                mt [] (Set.insert start Set.empty) start end
+            )
