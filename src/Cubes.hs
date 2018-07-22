@@ -32,7 +32,7 @@ doCubes_ acc f ci@(CubeID (DVec x y z)) mt =
     let n = MT.bound mt in
     let s = MT.cube mt in
     let u = CubeID (DVec x y (z+s)) in
-    if (z+s) >= n then
+    if z >= n then
         doCubes_ acc f (CubeID (DVec (x+s) y 0)) mt
     else if x >= n then
         doCubes_ acc f (CubeID (DVec 0 (y+s) 0)) mt
@@ -307,3 +307,7 @@ pathThroughShapes grounded connectome =
         Set.empty
         (Set.toList grounded)
         connectome
+
+drawPathsToShapes :: ConnectomeTree -> Set WShapeID -> Connectome -> Set DVec
+drawPathsToShapes ct grounded connectome =
+    Set.empty

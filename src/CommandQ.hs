@@ -95,17 +95,18 @@ simplePlotPlanes n ci@(CubeID cvec@(DVec cx cy cz)) dv@(DVec x y z) voxels mt =
     let
         bound = MT.bound mt
         maxy y =
-            if y + n >= bound then
+            let yn = y - (mod y n) in
+            if yn + n >= bound then
                 bound - 1
             else
-                y + n - 1
+                yn + n
 
         planes =
             List.filter
                     (\plane -> Set.size plane > 0)
                     (List.map
                              (\y -> Set.filter (\(DVec dx dy dz) -> dy == y) voxels)
-                             [0 .. (maxy (y - (mod y n)))]
+                             [cy .. (maxy y)]
                     )
     in
     List.foldl

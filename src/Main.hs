@@ -156,6 +156,9 @@ runSubCommands args =
 
         let ct = pathThroughShapes grounded connectome
         putStrLn ("paths " ++ (show ct))
+
+        let skeleton = drawPathsToShapes ct grounded connectome
+        putStrLn ("skeleton " ++ (show skeleton))
                  
         runSubCommands tl
                  
