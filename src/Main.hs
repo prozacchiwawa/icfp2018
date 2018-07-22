@@ -1,5 +1,6 @@
 module Main where
 
+import Debug.Trace
 import Data.Bits
 import Data.Word
 import qualified Data.List as List
@@ -152,16 +153,24 @@ runSubCommands args =
                           shapes
                      )
                      extractedCubes
+
+        let wshapes =
+                Map.mapWithKey
+                   (\k v ->
+                        Cubes.mapShapesToWorldSpace (trace ("k " ++ (show k)) k) v
+                   )
+                   shapes
+                   
         putStrLn
             ("grounded " ++
              (show
               (Map.mapWithKey
                       (\k v -> Cubes.groundedShapes v)
-                      shapes
+                      wshapes
               )
              )
             )
-        putStrLn (show shapes)
+        putStrLn (show wshapes)
 
       "ccr" : (filename : tl) -> do
         file <- B.readFile filename

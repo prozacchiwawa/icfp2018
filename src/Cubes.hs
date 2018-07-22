@@ -66,6 +66,14 @@ neighborCubes dv@(DVec x y z) s mt =
         )
         possible
 
+{- Map shapes to world space -}
+mapShapesToWorldSpace :: DVec -> Map DVec (Set DVec) -> Map DVec (Set DVec)
+mapShapesToWorldSpace dv shapes =
+    Map.fromList
+       (List.map (\(k,v) -> (addVec k dv, Set.map (addVec dv) v))
+                (Map.toList shapes)
+       )
+       
 {- Find the grounded shapes -}
 groundedShapes :: Map DVec (Set DVec) -> Map DVec Bool
 groundedShapes shapes =
@@ -77,3 +85,11 @@ groundedShapes shapes =
             /= []
        )
        shapes
+
+{- Adjacent shapes 
+ - Given the position and shapes of cube 1 and position and shapes of cube2,
+ - output a list of connected shapes from c1 to c2.
+ -}
+adjacentShapes :: DVec -> Map DVec (Set DVec) -> DVec -> Map DVec (Set DVec) -> [(DVec,DVec)]
+adjacentShapes c1 c1s c2 c2s =
+    []
