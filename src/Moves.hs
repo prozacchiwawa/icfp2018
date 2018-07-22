@@ -68,30 +68,33 @@ getShapesInCube_ :: Map DVec DVec -> MT.ModelTree -> Map DVec DVec
 getShapesInCube_ m mt =
     MT.foldZXY
       (\dv m ->
-        let
-            neighborhood =
-                List.filter
-                    (\n -> MT.lookupTree n mt)
-                    ([dv] ++ (MT.neighborMoves mt dv))
+       if MT.lookupTree dv mt then
+           let 
+               neighborhood =
+                   List.filter
+                           (\n -> MT.lookupTree n mt)
+                           ([dv] ++ (MT.neighborMoves mt dv))
 
-            neighborhoodBelongsTo =
-                List.map
-                    (\a ->
-                         case Map.lookup a m of
-                           Just a -> a
-                           Nothing -> a
-                    )
-                    neighborhood
+               neighborhoodBelongsTo =
+                   List.map
+                           (\a ->
+                                case Map.lookup a m of
+                                  Just a -> a
+                                  Nothing -> a
+                           )
+                       neighborhood
 
-            bestNeighbor =
-                case neighborhoodBelongsTo of
-                  [] -> dv
-                  _ -> minimum neighborhoodBelongsTo
-        in
-        List.foldl
-                (\m e -> Map.insert e bestNeighbor m)
-                m
-                neighborhood
+               bestNeighbor =
+                   case neighborhoodBelongsTo of
+                     [] -> dv
+                     _ -> minimum neighborhoodBelongsTo
+           in
+           List.foldl
+              (\m e -> Map.insert e bestNeighbor m)
+              m
+              neighborhood
+       else
+           m
       )
       m
       mt
