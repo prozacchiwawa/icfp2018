@@ -11,35 +11,42 @@ import qualified ModelTree as MT
 
 {- Path through space given tree object that specifies the taken elements in the space.
  -}
-createPathThroughSpace_ :: (DVec -> Bool) -> ModelTree -> [(Int,DVec)] -> [DVec] -> Set DVec -> DVec -> DVec -> Maybe [DVec]
-createPathThroughSpace_ suitable mt queue res resSet start end =
-    if start == end then
-        Just res
-    else
-        let
-            moves =
-                List.filter
-                        (\at -> (suitable at) && not (Set.member at resSet))
-                        (MT.neighborMoves mt start)
-            sorted =
-                List.sort
-                        (List.concat
-                                 [ List.map
-                                       (\a -> (manhattanDistance a end, a))
-                                       moves
-                                 , queue
-                                 ]
-                        )
-        in
-        tryOneAlternative sorted
-    where
-      tryOneAlternative alts =
-          case alts of
-            [] ->
-                Nothing
-            (m,hd) : tl ->
-                let newResSet = Set.insert hd resSet in
-                createPathThroughSpace_ suitable mt queue (hd : res) newResSet hd end
+createPathThroughSpace_ :: (DVec -> Bool) -> ModelTree -> [(Int,DVec,[DVec])] -> Map DVec (Int, DVec, [DVec]) -> DVec -> Maybe [DVec]
+createPathThroughSpace_ suitable mt queue resMap end =
+    case queue of
+      [] -> (trace ("failed to find path to " ++ (show end)) Nothing)
+      (m,hd,l) : tl ->
+          if hd == end then
+              Just (trace ("path-to " ++ (show end) ++ " is " ++ (show l)) ([hd]++l))
+          else
+              let
+                  moves =
+                      List.filter
+                              (\at -> (suitable at) && not (Map.member at resMap))
+                              (MT.neighborMoves mt hd)
+
+                  newElements =
+                      List.map
+                              (\a -> (manhattanDistance a end, a, [hd]++l))
+                              moves
+                              
+                  newResMap =
+                      List.foldl
+                          (\m (ma,hd,l) ->
+                               case Map.lookup hd resMap of
+                                 Nothing ->
+                                     Map.insert
+                                        hd
+                                        (ma,hd,l)
+                                        m
+                                 _ -> m
+                          )
+                          resMap
+                          newElements
+                          
+                  sorted = List.sort (List.concat [ newElements, tl ])
+              in
+              createPathThroughSpace_ suitable mt (trace ("finding path to " ++ (show end) ++ " with " ++ (show (List.length sorted)) ++ " now " ++ (show (List.take 10 queue))) sorted) newResMap end
 
 createPathThroughSpace :: ModelTree -> DVec -> DVec -> Maybe [DVec]
 createPathThroughSpace mt start end =
@@ -50,7 +57,10 @@ createPathThroughSpace mt start end =
             List.reverse
             (createPathThroughSpace_
                (\at -> not (lookupTree at mt))
-               mt [] [] (Set.insert start Set.empty) start end
+               mt
+               [(manhattanDistance end start, start, [])]
+               Map.empty
+               end
             )
 
 createPathThroughMatter :: ModelTree -> DVec -> DVec -> Maybe [DVec]
@@ -62,7 +72,10 @@ createPathThroughMatter mt start end =
             List.reverse
             (createPathThroughSpace_
                 (\at -> lookupTree at mt)
-                mt [] [] (Set.insert start Set.empty) start end
+                mt
+                [(manhattanDistance end start, start, [])]
+                Map.empty
+                end
             )
 
 {- Given a point list, make a trace list 

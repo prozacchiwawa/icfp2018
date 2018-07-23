@@ -233,7 +233,6 @@ paintCube ci@(CubeID cvec@(DVec cx cy cz)) targetModel wshapes machine =
 
         (DVec x y z) = MS.getAt (MS.getPrintHead machine)
                 
-        allVoxels = Map.foldl Set.union Set.empty (trace ("shapes for " ++ (show ci) ++ " are " ++ (show wshapes)) wshapes)
+        allVoxels = Map.foldl Set.union Set.empty wshapes
     in            
-    accretePlanes
-        ci (trace ("allVoxels " ++ (show allVoxels)) allVoxels) targetModel machine
+    accretePlanes ci allVoxels targetModel machine
