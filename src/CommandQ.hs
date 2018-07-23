@@ -181,8 +181,50 @@ tryToPlaceBlock dv@(DVec dx dy dz) machine =
                 else
                     tryPaths tl
 
-accretePlanes :: CubeID -> Set DVec -> ModelTree -> Machine -> Maybe Machine
-accretePlanes ci@(CubeID cvec@(DVec cx cy cz)) voxels targetModel machine =
+sortWithOrder order set =
+    case order of
+      YUpSortOrder ->
+        set
+        |> Set.map YUpOrder
+        |> Set.toAscList
+        |> List.map (\(YUpOrder a) -> a)
+      XUpSortOrder ->
+        set
+        |> Set.map XUpOrder
+        |> Set.toAscList
+        |> List.map (\(XUpOrder a) -> a)
+      XDownSortOrder ->
+        set
+        |> Set.map XDownOrder
+        |> Set.toAscList
+        |> List.map (\(XDownOrder a) -> a)
+      ZUpSortOrder ->
+        set
+        |> Set.map ZUpOrder
+        |> Set.toAscList
+        |> List.map (\(ZUpOrder a) -> a)
+      ZDownSortOrder ->
+        set
+        |> Set.map ZDownOrder
+        |> Set.toAscList
+        |> List.map (\(ZDownOrder a) -> a)
+                             
+sorts = [YUpSortOrder, XUpSortOrder, XDownSortOrder, ZUpSortOrder, ZDownSortOrder]
+
+tryAllOrders :: [SortOrder] -> (SortOrder -> a -> Maybe b) -> Maybe a -> Maybe b
+tryAllOrders sorts f m =
+    case sorts of
+      [] -> Nothing
+      hd : tl ->
+          case m of
+            Nothing -> Nothing
+            Just m ->
+                case f hd m of
+                  Nothing -> tryAllOrders tl f (Just m)
+                  Just m -> Just m
+
+accretePlanes :: SortOrder -> CubeID -> Set DVec -> ModelTree -> Machine -> Maybe Machine
+accretePlanes order ci@(CubeID cvec@(DVec cx cy cz)) voxels targetModel machine =
     let
         n = MT.cube targetModel
         tree = MS.getTree machine
@@ -210,15 +252,13 @@ accretePlanes ci@(CubeID cvec@(DVec cx cy cz)) voxels targetModel machine =
                     (not presentInTree && neighborsLowEnergy /= Set.empty)
                )
                voxels
-            |> Set.map YUpOrder
-            |> Set.toAscList
-            |> List.map (\(YUpOrder x) -> x)
+            |> sortWithOrder order
     in
     case vlist of
       hd : tl ->
           machine
           |> tryToPlaceBlock hd
-          |> optionThen (accretePlanes ci voxels targetModel)
+          |> optionThen (accretePlanes order ci voxels targetModel)
       _ -> Just machine
     
 {- Paint a single cube with energy off.
@@ -235,4 +275,4 @@ paintCube ci@(CubeID cvec@(DVec cx cy cz)) targetModel wshapes machine =
                 
         allVoxels = Map.foldl Set.union Set.empty wshapes
     in            
-    accretePlanes ci allVoxels targetModel machine
+    tryAllOrders sorts (\o -> accretePlanes o ci allVoxels targetModel) (Just machine)

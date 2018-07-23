@@ -29,6 +29,8 @@ data TraceCommand
     | FusionP ND
     | FusionS ND deriving (Ord, Eq, Show)
 
+data SortOrder = YUpSortOrder | ZUpSortOrder | XUpSortOrder | ZDownSortOrder | XDownSortOrder
+
 data YUpOrder = YUpOrder DVec deriving (Eq, Show)
 
 yUpOrder c@(YUpOrder (DVec cx cy cz)) d@(YUpOrder (DVec dx dy dz)) =
@@ -39,7 +41,62 @@ yUpOrder c@(YUpOrder (DVec cx cy cz)) d@(YUpOrder (DVec dx dy dz)) =
 
 instance Ord YUpOrder where
     (<=) = yUpOrder
-          
+
+data YDownOrder = YDownOrder DVec deriving (Eq, Show)
+
+yDownOrder c@(YDownOrder (DVec cx cy cz)) d@(YDownOrder (DVec dx dy dz)) =
+    c == d ||
+      (cy > dy) ||
+      (cy == dy && cx < dx) ||
+      (cy == dy && cx == dx && cz < dz)
+
+instance Ord YDownOrder where
+    (<=) = yDownOrder
+      
+data XUpOrder = XUpOrder DVec deriving (Eq, Show)
+
+xUpOrder c@(XUpOrder (DVec cx cy cz)) d@(XUpOrder (DVec dx dy dz)) =
+    c == d ||
+          (cx < dx) ||
+          (cx == dx && cy < dy) ||
+          (cx == dx && cy == dy && cz < dz)
+
+instance Ord XUpOrder where
+    (<=) = xUpOrder
+
+data XDownOrder = XDownOrder DVec deriving (Eq, Show)
+
+xDownOrder c@(XDownOrder (DVec cx cy cz)) d@(XDownOrder (DVec dx dy dz)) =
+    c == d ||
+      (cx > dx) ||
+      (cx == dx && cy < dy) ||
+      (cx == dx && cy == dy && cz < dz)
+
+instance Ord XDownOrder where
+    (<=) = xDownOrder      
+           
+data ZUpOrder = ZUpOrder DVec deriving (Eq, Show)
+
+zUpOrder c@(ZUpOrder (DVec cx cy cz)) d@(ZUpOrder (DVec dx dy dz)) =
+    c == d ||
+          (cz < dz) ||
+          (cz == dz && cy < dy) ||
+          (cz == dz && cy == dy && cx < dx)
+
+instance Ord ZUpOrder where
+    (<=) = zUpOrder
+
+data ZDownOrder = ZDownOrder DVec deriving (Eq, Show)
+
+zDownOrder c@(ZDownOrder (DVec cx cy cz)) d@(ZDownOrder (DVec dx dy dz)) =
+    c == d ||
+      (cz > dz) ||
+      (cz == dz && cy < dy) ||
+      (cz == dz && cy == dy && cz < dz)
+
+instance Ord ZDownOrder where
+    (<=) = zDownOrder      
+           
 data BasicCubeIDOrder =
     BasicCubeIDOrder CubeID deriving (Eq, Show)
 
@@ -195,6 +252,11 @@ optionDefault d v =
       Just v -> v
       Nothing -> d
 
+optionOrElse f v =
+    case v of
+      Just v -> Just v
+      Nothing -> f ()
+                 
 cubeIDFromWShapeID :: WShapeID -> CubeID
 cubeIDFromWShapeID (WShapeID (DVec wx wy wz)) =
     let
