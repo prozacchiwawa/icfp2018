@@ -1,5 +1,10 @@
 ICFP 2018, team last replicator ration.
 
+To build: "cabal build"
+To run: "run.sh skeleton ./problems/F/FA003_tgt.mdl ./res/FA003.nbt"
+
+It only supports assembly (sorry).
+
 The idea I had early on was that routing paths through a cube this large wasn't going to be easy, so I decided very early to start considering the board in smaller
 cubes.  I thought a lot the first day about how disconnected parts in each of the cubes could interact and realized that there was no 100% certain way to sequence
 building the cubes whole, or even strings of shapes woven through them.  It hit me that since I had already been thinking about shapes that I could do local reasoning
@@ -14,4 +19,3 @@ I used almost all the time, and feel like I made effective use of most of it.  I
 ICFP problems I've taken on.
 
 Thanks for organizing, this was a really great problem.
-
