@@ -28,7 +28,32 @@ data TraceCommand
     | Fill ND
     | FusionP ND
     | FusionS ND deriving (Ord, Eq, Show)
-      
+
+data YUpOrder = YUpOrder DVec deriving (Eq, Show)
+
+yUpOrder c@(YUpOrder (DVec cx cy cz)) d@(YUpOrder (DVec dx dy dz)) =
+    c == d ||
+          (cy < dy) ||
+          (cy == dy && cx < dx) ||
+          (cy == dy && cx == dx && cz < dz)
+
+instance Ord YUpOrder where
+    (<=) = yUpOrder
+          
+data BasicCubeIDOrder =
+    BasicCubeIDOrder CubeID deriving (Eq, Show)
+
+basicCubeIDOrder
+    c@(BasicCubeIDOrder (CubeID (DVec cx cy cz)))
+    d@(BasicCubeIDOrder (CubeID (DVec dx dy dz))) =
+    c == d ||
+          (cy < dy) ||
+          (cy == dy && cx < dx) ||
+          (cy == dy && cx == dx && cz < dz)
+       
+instance Ord BasicCubeIDOrder where
+    (<=) = basicCubeIDOrder
+       
 data ConnectomeTree = ConnectomeTree WShapeID [ConnectomeTree] deriving (Ord, Show, Eq)
 data Connectome = Connectome ([Map WShapeID [(WShapeID,WShapeID)]]) deriving (Ord, Show, Eq)
 data WorldShapes = WorldShapes (Map CubeID (Map WShapeID (Set DVec)))

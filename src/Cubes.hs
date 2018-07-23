@@ -17,6 +17,7 @@ import Types
 import qualified Moves as M
 import qualified ModelTree as MT
 import qualified Region as R
+import qualified MachineState as MS
     
 isNonEmptyCube ci mt =
     MT.cubeFoldZXY
@@ -228,20 +229,6 @@ groundedShapeSet (WorldShapes wshapes) =
     in
     Set.fromList grounded
 
-newtype BasicCubeIDOrder =
-    BasicCubeIDOrder CubeID deriving (Eq, Show)
-
-basicCubeIDOrder
-    c@(BasicCubeIDOrder (CubeID (DVec cx cy cz)))
-    d@(BasicCubeIDOrder (CubeID (DVec dx dy dz))) =
-    c == d ||
-          (cy < dy) ||
-          (cy == dy && cx < dx) ||
-          (cy == dy && cx == dx && cz < dz)
-       
-instance Ord BasicCubeIDOrder where
-    (<=) = basicCubeIDOrder
-       
 cubesInBasicOrder :: WorldShapes -> [(CubeID,Map WShapeID (Set DVec))]
 cubesInBasicOrder (WorldShapes wshapes) =
     List.sortOn
@@ -341,13 +328,13 @@ groundOneShape mt (WShapeID sid) shape =
         -- Choose a point at plane 0
         plane0 = Set.filter (\(DVec x y z) -> y == 0) shape
         chosenGround =
-            case Set.toList (trace ("plane0 " ++ (show plane0)) plane0) of
+            case Set.toList plane0 of
               hd : tl -> hd
               _ -> sid
 
         matterPath = M.createPathThroughMatter mt chosenGround sid
     in
-    (trace ("matterPath from " ++ (show sid) ++ " to " ++ (show chosenGround) ++ " via " ++ (show matterPath)) matterPath)
+    matterPath
     |> fmap Set.fromList
     |> fmap (Set.insert chosenGround)
     |> optionDefault Set.empty
@@ -376,7 +363,7 @@ drawPathsToShapes (ConnectomeTree tr@(WShapeID wid) lst) grounded        connect
                          |> optionThen (Map.lookup sid)
                          |> optionDefault Set.empty
 
-                     groundSnake = groundOneShape targetModel (trace ("grounding " ++ (show sid)) sid) shapeSet
+                     groundSnake = groundOneShape targetModel sid shapeSet
                  in
                  Set.union
                     (drawPathsToShapes ctree grounded connectome ws targetModel)
@@ -395,7 +382,7 @@ drawPathsToShapes (ConnectomeTree tr@(WShapeID wid) lst) grounded        connect
                          |> optionThen (Map.lookup sid)
                          |> optionDefault Set.empty
 
-                     connectSnake = connectTwoShapes targetModel (WShapeID wid) (trace ("connecting " ++ (show sid) ++ " to " ++ (show wid)) sid)
+                     connectSnake = connectTwoShapes targetModel (WShapeID wid) sid
                  in
                  Set.union
                         (drawPathsToShapes ctree grounded connectome ws targetModel)
@@ -403,3 +390,24 @@ drawPathsToShapes (ConnectomeTree tr@(WShapeID wid) lst) grounded        connect
             )
             Set.empty
             lst
+
+{- Evaluate the goal of having a cube filled in the same way as the map specifies 
+ - Set is non-empty if they don't match.
+ -}
+isFilledSameWay :: CubeID -> ModelTree -> ModelTree -> Set DVec
+isFilledSameWay cid modelTarget machineTree =
+    let
+        n = MT.cube modelTarget
+    in
+    MT.cubeFoldZXY
+        cid
+        (\dv a ->
+             if lookupTree dv machineTree /= lookupTree dv modelTarget then
+                 Set.insert dv a
+             else
+                 a
+        )
+        Set.empty
+        modelTarget
+
+            

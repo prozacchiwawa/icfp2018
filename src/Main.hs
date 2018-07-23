@@ -105,16 +105,48 @@ runSubCommands args =
 
         let grounded = Cubes.groundedShapeSet wshapes
 
-        putStrLn ("grounded " ++ (show grounded))
-        putStrLn ("connectome " ++ (show connectome))
-
         let ct = pathThroughShapes grounded connectome
-        putStrLn ("paths " ++ (show ct))
-
         let skeleton = drawPathsToShapes ct grounded connectome wshapes tree
 
         let skeletonTree = MT.addFilledSet skeleton (MT.emptyTree (MT.cube tree) (bound tree))
-        putStrLn ("skeleton " ++ (show skeletonTree))
+        let skExtractedCubes = Cubes.extract skeletonTree
+        let skWshapes = Cubes.getWorldShapes skExtractedCubes
+        let cubes = Cubes.cubesInBasicOrder wshapes
+        let machine =
+                List.foldl
+                        (\machine (ci,csh) ->
+                             CQ.backupPaintCube
+                                   (trace ("cube " ++ (show ci)) ci) skWshapes skeletonTree machine
+                        )
+                        (MS.executeCommands [Flip] (MS.initMachine skeletonTree))
+                        cubes
+                        
+        let postMachine =
+                machine
+                |> MS.executeCommands [Flip]
+
+        {- Try to place the blocks. -}
+        let machineAfterPlacing =
+                List.foldl
+                    (\machine (ci,csh) ->
+                         let
+                             (WorldShapes ws) = wshapes
+                             cubeShapes =
+                                 Map.lookup ci ws
+                                 |> optionDefault Map.empty
+                         in
+                         CQ.paintCube ci tree cubeShapes machine
+                         |> optionDefault machine
+                    )
+                    postMachine
+                    cubes
+
+        let finMachine =
+                machineAfterPlacing
+                |> MS.navigateTo (DVec 0 0 0)
+                |> MS.executeCommands [Halt]
+                   
+        B.writeFile outf (encodeTraceCommands (List.reverse (MS.getCommands finMachine)))
             
         runSubCommands tl
                  

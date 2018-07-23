@@ -26,7 +26,7 @@ createPathThroughSpace_ suitable mt queue res resSet start end =
                         (List.concat
                                  [ List.map
                                        (\a -> (manhattanDistance a end, a))
-                                       (trace ("moves at " ++ (show start) ++ " = " ++ (show moves)) moves)
+                                       moves
                                  , queue
                                  ]
                         )
@@ -36,9 +36,7 @@ createPathThroughSpace_ suitable mt queue res resSet start end =
       tryOneAlternative alts =
           case alts of
             [] ->
-              trace
-                  ("path through space ended " ++ (show start) ++ " - " ++ (show end))
-                  Nothing
+                Nothing
             (m,hd) : tl ->
                 let newResSet = Set.insert hd resSet in
                 createPathThroughSpace_ suitable mt queue (hd : res) newResSet hd end
@@ -46,7 +44,7 @@ createPathThroughSpace_ suitable mt queue res resSet start end =
 createPathThroughSpace :: ModelTree -> DVec -> DVec -> Maybe [DVec]
 createPathThroughSpace mt start end =
     if lookupTree end mt || lookupTree start mt then
-        trace ("path through space ended " ++ (show start) ++ " - " ++ (show end)) Nothing
+        Nothing
     else
         fmap
             List.reverse
@@ -71,7 +69,7 @@ createPathThroughMatter mt start end =
  - For now just emit a series of SMove
  -}
 pathCommands at@(DVec ax ay az) ptlist =
-    case (trace ("at " ++ (show at) ++ " pathCommands " ++ (show ptlist)) ptlist) of
+    case ptlist of
       [] -> (at, [])
       hd@(DVec hx hy hz) : tl ->
           let (last, path) = pathCommands hd tl in

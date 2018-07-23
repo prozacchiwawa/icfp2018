@@ -147,3 +147,93 @@ backupPaintCube ci@(CubeID cvec@(DVec cx cy cz)) (WorldShapes shapes) targetMode
     in            
     simplePlotPlanes
         ci (trace ("allVoxels " ++ (show allVoxels)) allVoxels) targetModel startPlotting
+
+
+fillSlot dv@(DVec dx dy dz) machine =
+    let
+        at@(DVec ax ay az) = MS.getAt (MS.getPrintHead machine)
+        ox = dx - ax
+        oy = dy - ay
+        oz = dz - az
+    in
+    MS.executeCommands (trace ("fillSlot " ++ (show dv)) [Fill (ND ox oy oz)]) machine
+        
+tryToPlaceBlock dv@(DVec dx dy dz) machine =
+    let
+        at = MS.getAt (MS.getPrintHead machine)
+        tree = MS.getTree machine
+        neighborsRaw = MT.neighborMoves tree dv
+        neighborsFree =
+            List.filter (\n@(DVec nx ny nz) -> ny <= dy && not (lookupTree n tree)) neighborsRaw
+    in
+    tryPaths neighborsFree
+    where
+      tryPaths np =
+          case np of
+            [] -> Nothing
+            hd : tl ->
+                let
+                    m = MS.navigateTo hd machine
+                    navigated = MS.getAt (MS.getPrintHead m)
+                in
+                if navigated == hd then
+                    Just (fillSlot dv m)
+                else
+                    tryPaths tl
+
+accretePlanes :: CubeID -> Set DVec -> ModelTree -> Machine -> Maybe Machine
+accretePlanes ci@(CubeID cvec@(DVec cx cy cz)) voxels targetModel machine =
+    let
+        n = MT.cube targetModel
+        tree = MS.getTree machine
+        mtbound = bound targetModel
+        dv@(DVec x y z) = MS.getAt (MS.getPrintHead machine)
+        maxy y =
+            let yn = y - (mod y n) in
+            if yn + n >= mtbound then
+                mtbound - 2
+            else
+                yn + n
+
+        {- Voxels is all the voxels we need to fill.  Find the lowest one in y that has a
+         - neighbor in machine's tree.
+         -}
+        vlist =
+            Set.filter
+               (\v ->
+                    let
+                        neighborsRaw = MT.neighborMoves tree v
+                        neighborsLowEnergy =
+                            Set.fromList (List.filter (\n -> lookupTree n tree) neighborsRaw)
+                        presentInTree = lookupTree v tree
+                    in
+                    (not presentInTree && neighborsLowEnergy /= Set.empty)
+               )
+               voxels
+            |> Set.map YUpOrder
+            |> Set.toAscList
+            |> List.map (\(YUpOrder x) -> x)
+    in
+    case vlist of
+      hd : tl ->
+          machine
+          |> tryToPlaceBlock hd
+          |> optionThen (accretePlanes ci voxels targetModel)
+      _ -> Just machine
+    
+{- Paint a single cube with energy off.
+ - We do this by trying to add one cube at a time until the cube is finished.
+ -}
+paintCube :: CubeID -> ModelTree -> Map WShapeID (Set DVec) -> Machine -> Maybe Machine
+paintCube ci@(CubeID cvec@(DVec cx cy cz)) targetModel wshapes machine =
+    let
+        n = MT.cube targetModel
+        u = (DVec (cx+n) (cy+n) (cz+n))
+        mtbound = bound targetModel
+
+        (DVec x y z) = MS.getAt (MS.getPrintHead machine)
+                
+        allVoxels = Map.foldl Set.union Set.empty (trace ("shapes for " ++ (show ci) ++ " are " ++ (show wshapes)) wshapes)
+    in            
+    accretePlanes
+        ci (trace ("allVoxels " ++ (show allVoxels)) allVoxels) targetModel machine
