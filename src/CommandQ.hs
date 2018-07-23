@@ -15,7 +15,7 @@ import qualified MachineState as MS
 simplePlotVoxels :: [DVec] -> ModelTree -> Machine -> Machine
 simplePlotVoxels voxels targetModel machine =
     let at@(DVec x y z) = MS.getAt (MS.getPrintHead machine) in
-    case trace ("at " ++ (show at) ++ " voxels " ++ (show voxels)) voxels of
+    case voxels of
       hd@(DVec hx hy hz) : tl ->
           if hx == x && hy == y - 1 && hz == z then
               machine
@@ -95,14 +95,14 @@ simplePlotPlanes ci@(CubeID cvec@(DVec cx cy cz)) voxels targetModel machine =
                     (\plane -> Set.size plane > 0)
                     (List.map
                              (\y -> Set.filter (\(DVec dx dy dz) -> dy == y) voxels)
-                             [cy .. (trace ("simplePlotPlanes " ++ (show ci) ++ " height " ++ (show (maxy y))) (maxy y))]
+                             [cy .. (maxy y)]
                     )
     in
     List.foldl
         (\machine plane ->
             let (DVec fx fy fz) = minimum plane in
             machine
-            |> MS.navigateTo (trace ("simplePlotPlane " ++ (show plane)) (DVec fx (fy+1) fz))
+            |> MS.navigateTo (DVec fx (fy+1) fz)
             |> simplePlotPlane ci plane targetModel
         )
         machine
@@ -143,7 +143,7 @@ backupPaintCube ci@(CubeID cvec@(DVec cx cy cz)) (WorldShapes shapes) targetMode
             |> MS.navigateTo aboveOtherCubeLocation
             |> MS.navigateTo startPlottingLocation
                
-        allVoxels = Map.foldl Set.union Set.empty (trace ("shapes for " ++ (show ci) ++ " are " ++ (show wshapes)) wshapes)
+        allVoxels = Map.foldl Set.union Set.empty wshapes
     in            
     simplePlotPlanes
         ci (trace ("allVoxels " ++ (show allVoxels)) allVoxels) targetModel startPlotting

@@ -17,7 +17,7 @@ createPathThroughSpace_ suitable mt queue resMap end =
       [] -> (trace ("failed to find path to " ++ (show end)) Nothing)
       (m,hd,l) : tl ->
           if hd == end then
-              Just (trace ("path-to " ++ (show end) ++ " is " ++ (show l)) ([hd]++l))
+              Just ([hd]++l)
           else
               let
                   moves =
@@ -46,7 +46,7 @@ createPathThroughSpace_ suitable mt queue resMap end =
                           
                   sorted = List.sort (List.concat [ newElements, tl ])
               in
-              createPathThroughSpace_ suitable mt (trace ("finding path to " ++ (show end) ++ " with " ++ (show (List.length sorted)) ++ " now " ++ (show (List.take 10 queue))) sorted) newResMap end
+              createPathThroughSpace_ suitable mt sorted newResMap end
 
 createPathThroughSpace :: ModelTree -> DVec -> DVec -> Maybe [DVec]
 createPathThroughSpace mt start end =
