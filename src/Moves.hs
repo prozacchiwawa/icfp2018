@@ -11,7 +11,7 @@ import qualified ModelTree as MT
 
 {- Path through space given tree object that specifies the taken elements in the space.
  -}
-createPathThroughSpace_ :: (DVec -> Bool) -> MT.ModelTree -> [DVec] -> Set DVec -> DVec -> DVec -> Maybe [DVec]
+createPathThroughSpace_ :: (DVec -> Bool) -> ModelTree -> [DVec] -> Set DVec -> DVec -> DVec -> Maybe [DVec]
 createPathThroughSpace_ suitable mt res resSet start end =
     if start == end then
         Just res
@@ -25,7 +25,7 @@ createPathThroughSpace_ suitable mt res resSet start end =
                 List.sort
                     (List.map
                              (\a -> (manhattanDistance a end, a))
-                             moves
+                             (trace ("moves at " ++ (show start) ++ " = " ++ (show moves)) moves)
                     )
         in
         runThroughAlternatives (List.map (\(x,y) -> y) sorted)
@@ -42,26 +42,59 @@ createPathThroughSpace_ suitable mt res resSet start end =
                   Nothing ->
                       runThroughAlternatives tl
 
-createPathThroughSpace :: MT.ModelTree -> DVec -> DVec -> Maybe [DVec]
+createPathThroughSpace :: ModelTree -> DVec -> DVec -> Maybe [DVec]
 createPathThroughSpace mt start end =
-    if MT.lookupTree end mt || MT.lookupTree start mt then
+    if lookupTree end mt || lookupTree start mt then
         Nothing
     else
         fmap
             List.reverse
             (createPathThroughSpace_
-               (\at -> not (MT.lookupTree at mt))
+               (\at -> not (lookupTree at mt))
                mt [] (Set.insert start Set.empty) start end
             )
 
-createPathThroughMatter :: MT.ModelTree -> DVec -> DVec -> Maybe [DVec]
+createPathThroughMatter :: ModelTree -> DVec -> DVec -> Maybe [DVec]
 createPathThroughMatter mt start end =
-    if MT.lookupTree end mt || MT.lookupTree start mt then
+    if lookupTree end mt || lookupTree start mt then
         Nothing
     else
         fmap
             List.reverse
             (createPathThroughSpace_
-                (\at -> MT.lookupTree at mt)
+                (\at -> lookupTree at mt)
                 mt [] (Set.insert start Set.empty) start end
             )
+
+{- Given a point list, make a trace list 
+ - For now just emit a series of SMove
+ -}
+pathCommands at@(DVec ax ay az) ptlist =
+    case (trace ("at " ++ (show at) ++ " pathCommands " ++ (show ptlist)) ptlist) of
+      [] -> (at, [])
+      hd@(DVec hx hy hz) : tl ->
+          let (last, path) = pathCommands hd tl in
+          if hx /= ax then
+              (last
+              , List.concat
+                    [ [ SMove (LLD X (hx - ax)) ]
+                    , path
+                    ]
+              )
+          else if hy /= ay then
+              (last
+              , List.concat
+                    [ [ SMove (LLD Y (hy - ay)) ]
+                    , path
+                    ]
+               )
+          else if hz /= az then
+              (last
+              , List.concat
+                    [ [ SMove (LLD Z (hz - az)) ]
+                    , path
+                    ]
+               )
+          else
+              pathCommands at tl
+    

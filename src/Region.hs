@@ -1,5 +1,6 @@
 module Region where
 
+import Debug.Trace
 import qualified Data.List as List
 import qualified Data.Maybe as Maybe
 import qualified Data.Set as Set
@@ -11,41 +12,43 @@ import Types
 import qualified ModelTree as MT
 
 {- Given a modeltree, make a map where each full voxel DV contains itself in the map. -}
-initForShapeFinding :: MT.ModelTree -> Map DVec ShapeID
-initForShapeFinding mt =
-    MT.foldZXY
+initForShapeFinding :: CubeID -> ModelTree -> Map DVec WShapeID
+initForShapeFinding ci mt =
+    MT.cubeFoldZXY
+      ci
       (\dv a ->
-           if MT.lookupTree dv mt then
-               Map.insert dv (ShapeID dv) a
+           if lookupTree dv mt then
+               Map.insert dv (WShapeID dv) a
            else
                a
       )
       Map.empty
       mt
 
-getShapesInCube_ :: Map DVec ShapeID -> MT.ModelTree -> Map DVec ShapeID
-getShapesInCube_ m mt =
-    MT.foldZXY
+getShapesInCube_ :: CubeID -> Map DVec WShapeID -> ModelTree -> Map DVec WShapeID
+getShapesInCube_ cid m mt =
+    MT.cubeFoldZXY
+      cid
       (\dv m ->
-       if MT.lookupTree dv mt then
+       if lookupTree dv mt then
            let 
                neighborhood =
                    List.filter
-                           (\n -> MT.lookupTree n mt)
-                           ([dv] ++ (MT.neighborMoves mt dv))
+                           (\n -> lookupTree n mt)
+                           ([dv] ++ (MT.cubeNeigbhorMoves cid mt dv))
 
                neighborhoodBelongsTo =
                    List.map
                            (\a ->
                                 case Map.lookup a m of
                                   Just a -> a
-                                  Nothing -> (ShapeID a)
+                                  Nothing -> (WShapeID a)
                            )
                        neighborhood
 
                bestNeighbor =
                    case neighborhoodBelongsTo of
-                     [] -> (ShapeID dv)
+                     [] -> (WShapeID dv)
                      _ -> minimum neighborhoodBelongsTo
            in
            List.foldl
@@ -58,10 +61,10 @@ getShapesInCube_ m mt =
       m
       mt
 
-getShapesInCube :: MT.ModelTree -> Map DVec ShapeID
-getShapesInCube mt = do
-    let sinit = initForShapeFinding mt
-    untilSame (==) (\m -> getShapesInCube_ m mt) sinit
+getShapesInCube :: CubeID -> ModelTree -> Map DVec WShapeID
+getShapesInCube cid mt = do
+    let sinit = initForShapeFinding cid mt
+    untilSame (==) (\m -> getShapesInCube_ cid m mt) sinit
     where
       untilSame sameValues makeNewMap sinit =
           let newMap = makeNewMap sinit in
@@ -70,7 +73,7 @@ getShapesInCube mt = do
           else
               untilSame sameValues makeNewMap newMap
 
-getRegionLabels :: Map DVec ShapeID -> Set ShapeID
+getRegionLabels :: Map DVec WShapeID -> Set WShapeID
 getRegionLabels m =
     Set.fromList (List.map (\(x,y) -> y) (Map.toList m))
 

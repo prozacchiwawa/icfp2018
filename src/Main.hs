@@ -21,7 +21,8 @@ import qualified SQLiteTest as SQL
 import qualified Region as R
 import qualified Moves as M
 import qualified CommandQ as CQ
-            
+import qualified MachineState as MS
+    
 listOutTraceCommands :: Int -> Int -> B.ByteString -> IO ()
 listOutTraceCommands n l f =
     if n >= l then do
@@ -73,7 +74,7 @@ runSubCommands args =
       "test-region" : (filename : tl) -> do
         file <- B.readFile filename
         let tree = MT.makeTree 8 file
-        let rgns = R.getShapesInCube tree
+        let rgns = R.getShapesInCube (CubeID (DVec 0 0 0)) tree
         let labels = R.getRegionLabels rgns
         putStrLn ("rgns " ++ (show labels))
         let shapes = R.shapeFromRegions rgns tree
@@ -82,29 +83,8 @@ runSubCommands args =
       "cube-regions" : (filename : tl) -> do
         file <- B.readFile filename
         let tree = MT.makeTree 8 file
-        let c = Cubes.doCubes tree
-        let extractedCubes =
-                List.foldl
-                        (\m (CubeID c) ->
-                             Map.insert
-                                (CubeID c)
-                                (MT.extractCube c 8 tree)
-                                m
-                        )
-                        Map.empty
-                        (Set.toList c)
-        let shapes =
-                Map.mapWithKey
-                     (\k v ->
-                          let
-                              regions = R.getShapesInCube v
-                              shapes = R.shapeFromRegions regions v
-                          in
-                          shapes
-                     )
-                     extractedCubes
-
-        let wshapes = getWorldShapes shapes
+        let extractedCubes = Cubes.extract tree
+        let wshapes = Cubes.getWorldShapes extractedCubes
 
         let connectome = Cubes.getConnectome wshapes tree
 
@@ -118,29 +98,8 @@ runSubCommands args =
       "skeleton" : (filename : (outfile : tl)) -> do
         file <- B.readFile filename
         let tree = MT.makeTree 8 file
-        let c = Cubes.doCubes tree
-        let extractedCubes =
-                List.foldl
-                        (\m (CubeID c) ->
-                             Map.insert
-                                (CubeID c)
-                                (MT.extractCube c 8 tree)
-                                m
-                        )
-                        Map.empty
-                        (Set.toList c)
-        let shapes =
-                Map.mapWithKey
-                     (\k v ->
-                          let
-                              regions = R.getShapesInCube v
-                              shapes = R.shapeFromRegions regions v
-                          in
-                          shapes
-                     )
-                     extractedCubes
-
-        let wshapes = getWorldShapes shapes
+        let extractedCubes = Cubes.extract tree
+        let wshapes = Cubes.getWorldShapes extractedCubes
 
         let connectome = Cubes.getConnectome wshapes tree
 
@@ -157,81 +116,35 @@ runSubCommands args =
         let ct = pathThroughShapes grounded connectome
         putStrLn ("paths " ++ (show ct))
 
-        let skeleton = drawPathsToShapes ct grounded connectome
+        let skeleton = drawPathsToShapes ct grounded connectome wshapes
         putStrLn ("skeleton " ++ (show skeleton))
                  
         runSubCommands tl
                  
-      "run" : (filename : (outfile : tl)) -> do
-        file <- B.readFile filename
-        let tree = MT.makeTree 8 file
-        --let gd = MT.scanForFirstGrounded tree
-        --putStrLn ("firstGrounded " ++ (show gd))
-
-        {- First try: flip, draw in each 6x6 interior cube, then finish the cubes in order. -}
-        let c = Cubes.doCubes tree
-
-        let extracted = MT.extractCube (DVec 1 0 1) 8 tree
-        putStrLn (show extracted)
-{-
-        putStrLn "flip"
-        let resLoc = doPathThroughCubes mt c (DVec 0 0 0)
-        let finLoc = doFinishCubes mt c resLoc
-        putStrLn "flip"
-        returnHome finLoc
--}
-        runSubCommands tl
-
       -- Time to finish at least one strategy completely
       "type1" : (filename : (outf : tl)) -> do
         file <- B.readFile filename
         let tree = MT.makeTree 8 file
-        let c = Cubes.doCubes tree
-        let extractedCubes =
-                List.foldl
-                        (\m (CubeID c) ->
-                             Map.insert
-                                (CubeID c)
-                                (MT.extractCube c 8 tree)
-                                m
-                        )
-                        Map.empty
-                        (Set.toList c)
-        let shapes =
-                Map.mapWithKey
-                     (\k v ->
-                          let
-                              regions = R.getShapesInCube v
-                              shapes = R.shapeFromRegions regions v
-                          in
-                          shapes
-                     )
-                     extractedCubes
-
-        let wshapes = getWorldShapes shapes
-        let emt = MT.emptyTree 8 (MT.bound tree)
+        let extractedCubes = Cubes.extract tree
+        let wshapes = Cubes.getWorldShapes extractedCubes
+        let emt = MT.emptyTree 8 (bound tree)
         let cubes = Cubes.cubesInBasicOrder wshapes
-        let (lastPos, moves) =
+        let machine =
                 List.foldl
-                        (\(last,cmds) (ci,csh) ->
-                             let
-                                 (l,c) =
-                                     CQ.backupPaintCube 8 (trace ("cube " ++ (show ci)) ci) csh last emt tree
-                             in
-                             (l, cmds ++ c)
+                        (\machine (ci,csh) ->
+                             CQ.backupPaintCube
+                                   (trace ("cube " ++ (show ci)) ci) wshapes tree machine
                         )
-                        (DVec 0 0 0, [])
+                        (MS.executeCommands [Flip] (MS.initMachine tree))
                         cubes
-        let (finAt, finalPath) =
-                fmap
-                    (CQ.pathCommands lastPos)
-                    (M.createPathThroughSpace tree lastPos (DVec 0 0 0))
-                |> optionDefault (lastPos, [])
-                    
-        let moveres =
-                List.concat [ [Flip], moves, [Flip], finalPath, [Halt] ]
+                        
+        let finMachine =
+                machine
+                |> MS.executeCommands [Flip]
+                |> MS.navigateTo (DVec 0 0 0)
+                |> MS.executeCommands [Halt]
 
-        B.writeFile outf (encodeTraceCommands moveres)
+        B.writeFile outf (encodeTraceCommands (List.reverse (MS.getCommands finMachine)))
         runSubCommands tl
 
       "sqlite-test" : (filename : tl) -> do
@@ -240,7 +153,7 @@ runSubCommands args =
 
       "emptytree" : tl -> do
         let mt = MT.emptyTree 8 10
-        putStrLn ("mt 0 0 0 -> " ++ (show (MT.lookupTree (DVec 0 0 0) mt)))
+        putStrLn ("mt 0 0 0 -> " ++ (show (lookupTree (DVec 0 0 0) mt)))
                        
       [] -> do
         pure ()

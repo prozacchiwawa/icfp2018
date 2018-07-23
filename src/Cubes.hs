@@ -15,21 +15,22 @@ import qualified Data.Octree as O
 
 import Types
 import qualified ModelTree as MT
-
-isNonEmptyCube (CubeID startDv) size mt =
-    let extracted = MT.extractCube startDv size mt in
-    MT.foldZXY
+import qualified Region as R
+    
+isNonEmptyCube ci mt =
+    MT.cubeFoldZXY
+        ci
         (\dv a ->
-             if MT.lookupTree dv extracted then
+             if lookupTree dv mt then
                  True
              else
                  a
         )
         False
-        extracted
+        mt
     
 doCubes_ acc f ci@(CubeID (DVec x y z)) mt =
-    let n = MT.bound mt in
+    let n = bound mt in
     let s = MT.cube mt in
     let u = CubeID (DVec x y (z+s)) in
     if z >= n then
@@ -38,19 +39,19 @@ doCubes_ acc f ci@(CubeID (DVec x y z)) mt =
         doCubes_ acc f (CubeID (DVec 0 (y+s) 0)) mt
     else if y >= n then
         acc
-    else if isNonEmptyCube ci s mt then
+    else if isNonEmptyCube ci mt then
         doCubes_ (f ci acc) f u mt
     else
         doCubes_ acc f u mt
 
-doCubes :: MT.ModelTree -> Set CubeID
+doCubes :: ModelTree -> Set CubeID
 doCubes mt =
     doCubes_ Set.empty Set.insert (CubeID (DVec 0 0 0)) mt
 
-neighborCubes :: CubeID -> Int -> MT.ModelTree -> [CubeID]
+neighborCubes :: CubeID -> Int -> ModelTree -> [CubeID]
 neighborCubes (CubeID (DVec x y z)) s mt =
     let
-        bounds = MT.bound mt
+        bounds = bound mt
         toLeft =  DVec (x-s) y     z
         toRight = DVec (x+s) y     z
         below =   DVec x     (y-s) z
@@ -72,22 +73,41 @@ neighborCubes (CubeID (DVec x y z)) s mt =
         )
         possible
 
-getWorldShapes :: Map CubeID (Map ShapeID (Set DVec)) -> Map CubeID (Map WShapeID (Set DVec))
-getWorldShapes shapes =
-    Map.mapWithKey
-           (\k v ->
-                Cubes.mapShapesToWorldSpace k v
-           )
-           shapes
+extract :: ModelTree -> ExtractedCubes
+extract tree =
+    let c = Cubes.doCubes tree in
+    ExtractedCubes
+    (List.foldl
+        (\m (CubeID c) ->
+             Map.insert
+                    (CubeID c)
+                    tree
+                    m
+        )
+        Map.empty
+        (Set.toList c)
+    )
         
-{- Map shapes to world space -}
-mapShapesToWorldSpace :: CubeID -> Map ShapeID (Set DVec) -> Map WShapeID (Set DVec)
-mapShapesToWorldSpace (CubeID dv) shapes =
-    Map.fromList
-       (List.map (\((ShapeID k),v) -> (WShapeID (addVec k dv), Set.map (addVec dv) v))
-                (Map.toList shapes)
-       )
-       
+getWorldShapes :: ExtractedCubes -> WorldShapes
+getWorldShapes (ExtractedCubes extractedCubes) =
+    WorldShapes
+    (Map.mapWithKey
+           (\k v ->
+                let
+                    regions = R.getShapesInCube k v
+                    shapes = R.shapeFromRegions regions v
+                in
+                shapes
+           )
+           extractedCubes
+    )
+
+getShapeSet :: WShapeID -> WorldShapes -> Set DVec
+getShapeSet sid (WorldShapes wshapes) =
+    Map.lookup (cubeIDFromWShapeID sid) wshapes
+    |> optionThen (\cmap -> Map.lookup sid cmap)
+    |> optionDefault Set.empty
+           
 {- Find the grounded shapes -}
 groundedShapes :: Map WShapeID (Set DVec) -> Map WShapeID Bool
 groundedShapes shapes =
@@ -121,7 +141,7 @@ shellShape n shapes =
        shapes
 
 {- Find the neighbors of the shape shell that lie outside the same cube. -}
-externalNeighbors :: Int -> Map WShapeID (Set DVec) -> MT.ModelTree -> Map WShapeID (Set DVec)
+externalNeighbors :: Int -> Map WShapeID (Set DVec) -> ModelTree -> Map WShapeID (Set DVec)
 externalNeighbors n shapes mt =
     Map.mapWithKey
        (\(WShapeID k@(DVec x y z)) v ->
@@ -159,7 +179,7 @@ externalNeighbors n shapes mt =
  - Given the position and shapes of cube 1 and position and shapes of cube2,
  - output a list of connected shapes from c1 to c2.
  -}
-adjacentShapes :: Int -> Map WShapeID (Set DVec) -> Map WShapeID (Set DVec) -> MT.ModelTree -> Map WShapeID [(WShapeID,WShapeID)]
+adjacentShapes :: Int -> Map WShapeID (Set DVec) -> Map WShapeID (Set DVec) -> ModelTree -> Map WShapeID [(WShapeID,WShapeID)]
 adjacentShapes n c1 c2 mt =
     let
         {- shellsC1 is a shape-identifier-indexed map of potentially overlapping points for
@@ -187,8 +207,8 @@ adjacentShapes n c1 c2 mt =
     in
     Map.filter (\v -> List.length v > 0) c2ListMatchingShellsC1
 
-groundedShapeSet :: Map CubeID (Map WShapeID (Set DVec)) -> Set WShapeID
-groundedShapeSet wshapes =                                                       
+groundedShapeSet :: WorldShapes -> Set WShapeID
+groundedShapeSet (WorldShapes wshapes) =
     let
         groundedShapesInCubes =
             Map.mapWithKey
@@ -221,14 +241,14 @@ basicCubeIDOrder
 instance Ord BasicCubeIDOrder where
     (<=) = basicCubeIDOrder
        
-cubesInBasicOrder :: Map CubeID (Map WShapeID (Set DVec)) -> [(CubeID,Map WShapeID (Set DVec))]
-cubesInBasicOrder wshapes =
+cubesInBasicOrder :: WorldShapes -> [(CubeID,Map WShapeID (Set DVec))]
+cubesInBasicOrder (WorldShapes wshapes) =
     List.sortOn
             (\(k,v) -> BasicCubeIDOrder k)
             (Map.toList wshapes)
        
-getConnectome :: Map CubeID (Map WShapeID (Set DVec)) -> MT.ModelTree -> Connectome
-getConnectome wshapes mt =
+getConnectome :: WorldShapes -> ModelTree -> Connectome
+getConnectome (WorldShapes wshapes) mt =
     let
         connectomeRaw =
             List.map
@@ -308,6 +328,20 @@ pathThroughShapes grounded connectome =
         (Set.toList grounded)
         connectome
 
-drawPathsToShapes :: ConnectomeTree -> Set WShapeID -> Connectome -> Set DVec
-drawPathsToShapes ct grounded connectome =
-    Set.empty
+connectomeShapeID :: ConnectomeTree -> WShapeID
+connectomeShapeID (ConnectomeTree ct _) = ct
+        
+drawPathsToShapes :: ConnectomeTree ->    Set WShapeID -> Connectome -> WorldShapes -> Set DVec
+drawPathsToShapes (ConnectomeTree tr lst) grounded        connectome    wshapes =
+    if tr == WShapeID (DVec 0 0 0) then
+        -- Ground the shapes in lst
+        List.foldl
+            (\s ct ->
+                 Set.union s (getShapeSet (connectomeShapeID ct) wshapes)
+            )
+            Set.empty
+            lst
+    else
+        -- Connect the shapes in lst to tr
+        Set.empty
+        

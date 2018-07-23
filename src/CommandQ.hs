@@ -10,55 +10,47 @@ import Data.Map (Map)
 import Types
 import qualified Moves as M
 import qualified ModelTree as MT
-
-simplePlotVoxels :: DVec -> [DVec] -> MT.ModelTree -> (DVec, [TraceCommand])
-simplePlotVoxels at@(DVec x y z) voxels mt =
+import qualified MachineState as MS
+    
+simplePlotVoxels :: [DVec] -> ModelTree -> Machine -> Machine
+simplePlotVoxels voxels targetModel machine =
+    let at@(DVec x y z) = MS.getAt (MS.getPrintHead machine) in
     case trace ("at " ++ (show at) ++ " voxels " ++ (show voxels)) voxels of
       hd@(DVec hx hy hz) : tl ->
           if hx == x && hy == y - 1 && hz == z then
-              let (next, cmds) = simplePlotVoxels at tl mt in
-              let allCommands =
-                      List.concat
-                              [ [Fill (ND 0 (-1) 0)]
-                              , cmds
-                              ]
-              in
-              ( next
-              , trace ("at " ++ (show at) ++ " fill " ++ (show allCommands)) allCommands
-              )
+              machine
+              |> MS.executeCommands [Fill (ND 0 (-1) 0)]
+              |> simplePlotVoxels tl targetModel
           else
-              let
-                  (afterMove, moves) = pathCommands at [(DVec hx (hy+1) hz)]
-                  (next, cmds) = simplePlotVoxels afterMove voxels mt
-              in
-              ( next
-              , List.concat
-                    [ moves
-                    , cmds
-                    ]
-              )
-      [] -> (at, [])
+              machine
+              |> MS.navigateTo (DVec hx (hy+1) hz)
+              |> simplePlotVoxels voxels targetModel
+      [] -> machine
 
-simplePlotRow :: Int -> CubeID -> DVec -> [DVec] -> MT.ModelTree -> (DVec, [TraceCommand])
-simplePlotRow n ci dv@(DVec x y z) voxels mt =
+simplePlotRow :: CubeID -> [DVec] -> ModelTree -> Machine -> Machine
+simplePlotRow ci voxels targetModel machine =
     let
-        bound = MT.bound mt
+        n = MT.cube targetModel
+        (DVec x y z) = MS.getAt (MS.getPrintHead machine)
+        mtbound = bound targetModel
         maxz z =
-            if z + n >= bound then
-                bound - 1
+            if z + n >= mtbound then
+                mtbound - 1
             else
                 z + n - 1
         plots = List.sort voxels
     in
-    simplePlotVoxels dv plots mt
+    simplePlotVoxels plots targetModel machine
 
-simplePlotPlane :: Int -> CubeID -> DVec -> Set DVec -> MT.ModelTree -> (DVec, [TraceCommand])
-simplePlotPlane n ci@(CubeID cvec@(DVec cx cy cz)) dv@(DVec x y z) voxels mt =
+simplePlotPlane :: CubeID -> Set DVec -> ModelTree -> Machine -> Machine
+simplePlotPlane ci@(CubeID cvec@(DVec cx cy cz)) voxels targetModel machine =
     let
-        bound = MT.bound mt
+        n = MT.cube targetModel
+        mtbound = bound targetModel
+        (DVec x y z) = MS.getAt (MS.getPrintHead machine)
         maxx x =
-            if x + n >= bound then
-                bound - 1
+            if x + n >= mtbound then
+                mtbound - 1
             else
                 x + n - 1
 
@@ -71,33 +63,30 @@ simplePlotPlane n ci@(CubeID cvec@(DVec cx cy cz)) dv@(DVec x y z) voxels mt =
                 )
     in
     List.foldl
-        (\(last, commands) row ->
+        (\machine row ->
             let
                 (DVec fx fy fz) =
-                    case Set.toList row of
+                    case row of
                       hd : tl -> hd
                       _ -> (DVec (x+1) y z)
-                           
-                (toward, move) =
-                    case fmap (pathCommands last) (M.createPathThroughSpace mt last (DVec fx (fy+1) fz)) of
-                      Just a -> a
-                      Nothing -> (last, [])
-
-                (l,c) = simplePlotRow n ci toward (trace ("simplePlotRow " ++ (show row)) (Set.toList row)) mt
             in
-            (l, commands ++ move ++ c)
+            machine
+            |> MS.navigateTo (DVec fx (fy+1) fz)
+            |> simplePlotRow ci row targetModel
         )
-        (dv, [])
-        rows    
+        machine
+        (List.map Set.toList rows)
       
-simplePlotPlanes :: Int -> CubeID -> DVec -> Set DVec -> MT.ModelTree -> (DVec, [TraceCommand])
-simplePlotPlanes n ci@(CubeID cvec@(DVec cx cy cz)) dv@(DVec x y z) voxels mt =
+simplePlotPlanes :: CubeID -> Set DVec -> ModelTree -> Machine -> Machine
+simplePlotPlanes ci@(CubeID cvec@(DVec cx cy cz)) voxels targetModel machine =
     let
-        bound = MT.bound mt
+        n = MT.cube targetModel
+        mtbound = bound targetModel
+        dv@(DVec x y z) = MS.getAt (MS.getPrintHead machine)
         maxy y =
             let yn = y - (mod y n) in
-            if yn + n >= bound then
-                bound - 1
+            if yn + n >= mtbound then
+                mtbound - 2
             else
                 yn + n
 
@@ -106,107 +95,55 @@ simplePlotPlanes n ci@(CubeID cvec@(DVec cx cy cz)) dv@(DVec x y z) voxels mt =
                     (\plane -> Set.size plane > 0)
                     (List.map
                              (\y -> Set.filter (\(DVec dx dy dz) -> dy == y) voxels)
-                             [cy .. (maxy y)]
+                             [cy .. (trace ("simplePlotPlanes " ++ (show ci) ++ " height " ++ (show (maxy y))) (maxy y))]
                     )
     in
     List.foldl
-        (\(last,commands) plane ->
-            let
-                firstOfPlane = DVec x (y+1) z
-                (toward, move) =
-                    case fmap (pathCommands last) (M.createPathThroughSpace mt last firstOfPlane) of
-                      Just a -> a
-                      Nothing -> (last, [])
-
-                (l,c) = simplePlotPlane n ci toward (trace ("plane " ++ (show plane)) plane) mt
-            in
-            (l, commands ++ move ++ c)
+        (\machine plane ->
+            let (DVec fx fy fz) = minimum plane in
+            machine
+            |> MS.navigateTo (trace ("simplePlotPlane " ++ (show plane)) (DVec fx (fy+1) fz))
+            |> simplePlotPlane ci plane targetModel
         )
-        (dv, [])
+        machine
         planes
-    
-{- Given a point list, make a trace list 
- - For now just emit a series of SMove
- -}
-pathCommands at@(DVec ax ay az) ptlist =
-    case (trace ("at " ++ (show at) ++ " pathCommands " ++ (show ptlist)) ptlist) of
-      [] -> (at, [])
-      hd@(DVec hx hy hz) : tl ->
-          let (last, path) = pathCommands hd tl in
-          if hx /= ax then
-              (last
-              , List.concat
-                    [ [ SMove (LLD X (hx - ax)) ]
-                    , path
-                    ]
-              )
-          else if hy /= ay then
-              (last
-              , List.concat
-                    [ [ SMove (LLD Y (hy - ay)) ]
-                    , path
-                    ]
-               )
-          else if hz /= az then
-              (last
-              , List.concat
-                    [ [ SMove (LLD Z (hz - az)) ]
-                    , path
-                    ]
-               )
-          else
-              pathCommands at tl
     
 {- Paint a single cube with energy on.
  - We assume that each y plane is completed before the next one is started.
  -}
-backupPaintCube :: Int -> CubeID -> Map WShapeID (Set DVec) -> DVec -> MT.ModelTree -> MT.ModelTree -> (DVec,[TraceCommand])
-backupPaintCube n ci@(CubeID cvec@(DVec cx cy cz)) shapes whereWas@(DVec x y z) cmt mt =
+backupPaintCube :: CubeID -> WorldShapes -> ModelTree -> Machine -> Machine
+backupPaintCube ci@(CubeID cvec@(DVec cx cy cz)) (WorldShapes shapes) targetModel mach =
     let
-        bound = MT.bound mt 
+        n = MT.cube targetModel
+        u = (DVec (cx+n) (cy+n) (cz+n))
+        mtbound = bound targetModel
+        wshapes =
+            Map.lookup ci shapes
+            |> optionDefault Map.empty
         yAbove y =
             let ym = y - (mod y n) + n in
-            if ym >= bound then
-                bound - 1
+            if ym >= mtbound then
+                mtbound - 1
             else
                 ym
-                      
-        slice = MT.extractCube cvec n mt
+
+        (DVec x y z) = MS.getAt (MS.getPrintHead mach)
+                
         (DVec fx fy fz) =
-            fmap (\dv -> addVec dv cvec) (MT.scanForFirstGrounded slice)
+            (MT.scanForFirstGrounded cvec (DVec (cx+n) (cy+n) (cz+n)) targetModel)
             |> optionDefault (DVec cx (cy+1) cz)
 
         aboveLocation = DVec x (yAbove y) z
         aboveOtherCubeLocation = DVec fx (yAbove fy) fz
         startPlottingLocation = DVec fx fy fz
                                 
-        (ptaLast, pathToAboveThisCube) =
-            fmap (pathCommands whereWas)
-                (M.createPathThroughSpace mt whereWas (trace ("aboveLocation " ++ (show aboveLocation)) aboveLocation))
-            |> optionDefault (whereWas, [])
+        startPlotting =
+            mach
+            |> MS.navigateTo aboveLocation
+            |> MS.navigateTo aboveOtherCubeLocation
+            |> MS.navigateTo startPlottingLocation
                
-        (pttLast, pathToTargetCube) =
-            fmap (pathCommands aboveLocation)
-                (M.createPathThroughSpace mt ptaLast (trace ("aboveOtherCubeLocation " ++ (show aboveOtherCubeLocation)) aboveOtherCubeLocation))
-            |> optionDefault (ptaLast, [])
-               
-        (ptsLast, pathToStartOfPlotting) =
-            fmap (pathCommands aboveOtherCubeLocation)
-                (M.createPathThroughSpace mt pttLast (trace ("startPlottingLocation " ++ (show startPlottingLocation)) startPlottingLocation))
-            |> optionDefault (pttLast, [])
-               
-        allVoxels = Map.foldl Set.union Set.empty shapes
-                    
-        (last, afterPlot) =
-            simplePlotPlanes
-                n ci ptsLast (trace ("allVoxels " ++ (show allVoxels)) allVoxels) cmt
-                            
-    in
-    ( last
-    , List.concat
-            [ pathToAboveThisCube
-            , pathToTargetCube
-            , pathToStartOfPlotting
-            , afterPlot
-            ]
-    )
+        allVoxels = Map.foldl Set.union Set.empty (trace ("shapes for " ++ (show ci) ++ " are " ++ (show wshapes)) wshapes)
+    in            
+    simplePlotPlanes
+        ci (trace ("allVoxels " ++ (show allVoxels)) allVoxels) targetModel startPlotting

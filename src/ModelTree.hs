@@ -1,38 +1,19 @@
 module ModelTree where
 
+import Debug.Trace
 import Data.Bits
 import Data.Word
 import qualified Data.List as List
 import qualified Data.Set as Set
+import Data.Set (Set)
 import qualified Data.Map as Map
+import Data.Map (Map)
 import qualified Data.Maybe as Maybe
 import qualified Data.ByteString as B
 import qualified Linear.V3 as V3
 import qualified Data.Octree as O
 
 import Types
-    
-{- A hopefully more efficient representation of the model space that will be convenient for
- - making copies of and updating.  We'll try to balance the number of nodes in the tree with
- - the number of bits representing spaces to get a good size speed compromise.
- -
- - mscale determines the size of a leaf ByteString if it is a copy.
- - oscale determines the size of the leaves in this tree.
- -}
-
-data ModelTree = ModelTree
-    { prev :: Maybe (DVec, ModelTree)
-    , mscale :: Int
-    , oscale :: Int
-    , offset :: Int
-    , tree :: O.Octree B.ByteString
-    }
-
-data MapLayer = MapLayer
-    { next :: Maybe MapLayer
-    , dim :: Int
-    , layer :: B.ByteString
-    }
 
 {-               
 -- We will need to shorthand items in process in leaves in order to be able to compute with
@@ -85,108 +66,44 @@ makeTree n f =
     let actualSize = intcoerce (B.index f 0) in
     ModelTree
     { prev = Nothing
-    , mscale = n
+    , chunk = n
+    , mscale = actualSize
     , oscale = actualSize
     , offset = 1
-    , tree = O.fromList [ (V3.V3 0.0 0.0 0.0, f) ]
+    , bits = f
+    , filled = Set.empty
     }
 
 emptyTree :: Int -> Int -> ModelTree
 emptyTree n bound =
     ModelTree
     { prev = Nothing
-    , mscale = n
+    , chunk = n
+    , mscale = 0
     , oscale = bound
     , offset = 0
-    , tree = O.fromList []
+    , bits = B.pack []
+    , filled = Set.empty
     }
 
 cube :: ModelTree -> Int
-cube mt = mscale mt
+cube mt = chunk mt
 
-bound :: ModelTree -> Int
-bound mt = oscale mt
-
-bitByteOfCoord offset scale x y z =
-    let bitNumber = x * scale * scale + y * scale + z in
-    let byteOffset = offset + (quot bitNumber 8) in
-    let bitOffset = mod bitNumber 8 in
-    (byteOffset, bitOffset)
-           
-lookupInNode offset scale x y z bits =
-    let (byteOffset, bitOffset) = bitByteOfCoord offset scale x y z in
-    let word = B.index bits byteOffset in
-    let bitValue = (shift word (bitOffset * (-1))) .&. 1 in
-    bitValue /= 0
-
-scanForFirstGrounded_ :: ModelTree -> DVec -> Maybe DVec
-scanForFirstGrounded_ mt dv@(DVec x y z) =
-    if x >= bound mt then
+scanForFirstGrounded :: DVec -> DVec -> ModelTree -> Maybe DVec
+scanForFirstGrounded dv@(DVec x y z) e@(DVec ex ey ez) mt =
+    if x >= ex then
         Nothing
-    else if z >= bound mt then
-        scanForFirstGrounded_ mt (DVec (x+1) y 0)
+    else if z >= ez then
+        scanForFirstGrounded (DVec (x+1) y 0) e mt
     else
         if lookupTree dv mt then
             Just dv
         else
-            scanForFirstGrounded_ mt (DVec x y (z+1))
+            scanForFirstGrounded (DVec x y (z+1)) e mt
 
-scanForFirstGrounded :: ModelTree -> Maybe DVec
-scanForFirstGrounded mt = scanForFirstGrounded_ mt (DVec 0 0 0)
-
-lookupTree :: DVec -> ModelTree -> Bool
-lookupTree (DVec x y z) mt =
+neighborMoves_ :: DVec -> DVec -> ModelTree -> DVec -> [DVec]
+neighborMoves_ (DVec nx ny nz) (DVec ax ay az) mt at@(DVec x y z) =
     let
-        scale =
-            case prev mt of
-              Nothing -> oscale mt
-              Just _ -> mscale mt
-
-        xNode = div x scale
-        yNode = div y scale
-        zNode = div z scale
-        mbits = 
-            O.lookup
-                 (tree mt)
-                 (V3.V3 (fromIntegral xNode) (fromIntegral yNode) (fromIntegral zNode))
-    in
-    case mbits of
-      Just (_,bits) ->
-          lookupInNode (offset mt) scale (mod x scale) (mod y scale) (mod z scale) bits
-      Nothing ->
-          case (prev mt) of
-            Just (DVec ux uy uz, p) -> lookupTree (DVec (x+ux) (y+uy) (z+uz)) p
-            Nothing -> False
-
-showSlice :: DVec -> ModelTree -> String
-showSlice dv@(DVec x y z) mt =
-    if x >= bound mt then
-        "|\n" ++ (showSlice (DVec 0 y (z+1)) mt)
-    else if z >= bound mt then
-        ""
-    else if lookupTree dv mt then
-        "@@" ++ (showSlice (DVec (x+1) y z) mt)
-    else
-        "  " ++ (showSlice (DVec (x+1) y z) mt)
-            
-showSlices_ :: Int -> ModelTree -> String
-showSlices_ y mt =
-    if y >= bound mt then
-        ""
-    else
-        ("--- " ++ (show y) ++ " ---\n" ++
-                    (showSlice (DVec 0 y 0) mt) ++ "\n" ++ (showSlices_ (y+1) mt)
-        )
-                       
-showSlices :: ModelTree -> String
-showSlices mt =
-    showSlices_ 0 mt
-
-{- Get the possible neighboring moves from here -}
-neighborMoves :: ModelTree -> DVec -> [DVec]
-neighborMoves mt at@(DVec x y z) =
-    let
-        bounds = bound mt
         toLeft =  DVec (x-1) y     z
         toRight = DVec (x+1) y     z
         below =   DVec x     (y-1) z
@@ -197,34 +114,73 @@ neighborMoves mt at@(DVec x y z) =
     in
     List.filter
         (\at@(DVec x y z) ->
-             x >= 0 && y >= 0 && z >= 0 &&
-             x < bounds && y < bounds && z < bounds
+             x >= nx && y >= ny && z >= nz &&
+             x <  ax && y <  ay && z <  az
         )
         possible
 
-extractCube :: DVec -> Int -> ModelTree -> ModelTree
-extractCube start newsize mt =
-    ModelTree
-    { prev = Just (start, mt)
-    , mscale = cube mt
-    , oscale = newsize
-    , offset = 0
-    , tree = O.fromList []
-    }
-
-foldZXY_ dv@(DVec x y z) f a mt =
-    let bounds = bound mt in
-    if y >= bounds then
-        a
-    else if z >= bounds then
-        foldZXY_ (DVec (x+1) y 0) f a mt
-    else if x >= bounds then
-        foldZXY_ (DVec 0 (y+1) 0) f a mt
+{- Get the possible neighboring moves from here -}
+neighborMoves mt at =
+    let mtbounds = bound mt in
+    neighborMoves_ (DVec 0 0 0) (DVec mtbounds mtbounds mtbounds) mt at
+    
+cubeNeigbhorMoves :: CubeID -> ModelTree -> DVec -> [DVec]
+cubeNeigbhorMoves (CubeID cv@(DVec cx cy cz)) mt at =
+    let
+        c = cube mt
+        u = DVec (cx+c) (cy+c) (cz+c)
+    in
+    neighborMoves_ cv u mt at
+        
+reverseBits :: Int -> Int -> Int -> Int
+reverseBits i y x = 
+    if i == 8 then
+        y
     else
-        foldZXY_ (DVec x y (z+1)) f (f dv a) mt
+        reverseBits (i+1) (y * 2 + (mod x 2)) (div x 2)
+
+makeBits :: Int -> Int -> [Word8] -> DVec -> DVec -> Int -> ModelTree -> B.ByteString
+makeBits count bits res s@(DVec sx sy sz) a@(DVec x y z) newsize mt =
+    if x >= sx + newsize then
+        B.pack (List.reverse res)
+    else if y >= sy + newsize then
+        makeBits count bits res (DVec sx sy sz) (DVec (x+1) sy sz) newsize mt
+    else if z >= sz + newsize then
+        makeBits count bits res (DVec sx sy sz) (DVec x (y+1) sz) newsize mt
+    else
+        let
+            newBits =
+                if lookupTree (DVec x y z) mt then
+                    (bits * 2) + 1
+                else
+                    bits * 2
+                         
+            newCount = count + 1
+        in
+        if newCount == 8 then
+            makeBits 0 0 ([toEnum (reverseBits 0 0 bits)] ++ res) s (DVec x y (z+1)) newsize mt
+        else
+            makeBits newCount newBits res s (DVec x y (z+1)) newsize mt
+        
+addFilled :: DVec -> ModelTree -> ModelTree
+addFilled dv mt =
+    let newFilled = Set.insert dv (filled mt) in
+    mt { filled = newFilled }
+        
+foldZXY_ u@(DVec ux uy uz) s@(DVec sx sy sz) dv@(DVec x y z) f a mt =
+    if z >= uz then
+        foldZXY_ u s (DVec (x+1) y sz) f a mt
+    else if x >= ux then
+        foldZXY_ u s (DVec sx (y+1) sz) f a mt
+    else if y >= uy then
+        a
+    else
+        foldZXY_ u s (DVec x y (z+1)) f (f dv a) mt
 
 foldZXY f a mt =
-    foldZXY_ (DVec 0 0 0) f a mt
+    let b = bound mt in
+    foldZXY_ (DVec b b b) (DVec 0 0 0) (DVec 0 0 0) f a mt
            
-instance Show ModelTree where
-    show = showSlices
+cubeFoldZXY (CubeID sv@(DVec cx cy cz)) f a mt =
+    let c = cube mt in
+    foldZXY_ (DVec (cx + c) (cy + c) (cz + c)) sv sv f a mt
