@@ -11,8 +11,8 @@ import qualified ModelTree as MT
 
 {- Path through space given tree object that specifies the taken elements in the space.
  -}
-createPathThroughSpace_ :: (DVec -> Bool) -> ModelTree -> [DVec] -> Set DVec -> DVec -> DVec -> Maybe [DVec]
-createPathThroughSpace_ suitable mt res resSet start end =
+createPathThroughSpace_ :: (DVec -> Bool) -> ModelTree -> [(Int,DVec)] -> [DVec] -> Set DVec -> DVec -> DVec -> Maybe [DVec]
+createPathThroughSpace_ suitable mt queue res resSet start end =
     if start == end then
         Just res
     else
@@ -23,47 +23,48 @@ createPathThroughSpace_ suitable mt res resSet start end =
                         (MT.neighborMoves mt start)
             sorted =
                 List.sort
-                    (List.map
-                             (\a -> (manhattanDistance a end, a))
-                             (trace ("moves at " ++ (show start) ++ " = " ++ (show moves)) moves)
-                    )
+                        (List.concat
+                                 [ List.map
+                                       (\a -> (manhattanDistance a end, a))
+                                       (trace ("moves at " ++ (show start) ++ " = " ++ (show moves)) moves)
+                                 , queue
+                                 ]
+                        )
         in
-        runThroughAlternatives (List.map (\(x,y) -> y) sorted)
+        tryOneAlternative sorted
     where
-      runThroughAlternatives alts =
+      tryOneAlternative alts =
           case alts of
             [] ->
-              Nothing
-            hd : tl ->
+              trace
+                  ("path through space ended " ++ (show start) ++ " - " ++ (show end))
+                  Nothing
+            (m,hd) : tl ->
                 let newResSet = Set.insert hd resSet in
-                case createPathThroughSpace_ suitable mt (hd : res) newResSet hd end of
-                  Just path ->
-                      Just path
-                  Nothing ->
-                      runThroughAlternatives tl
+                createPathThroughSpace_ suitable mt queue (hd : res) newResSet hd end
 
 createPathThroughSpace :: ModelTree -> DVec -> DVec -> Maybe [DVec]
 createPathThroughSpace mt start end =
     if lookupTree end mt || lookupTree start mt then
-        Nothing
+        trace ("path through space ended " ++ (show start) ++ " - " ++ (show end)) Nothing
     else
         fmap
             List.reverse
             (createPathThroughSpace_
                (\at -> not (lookupTree at mt))
-               mt [] (Set.insert start Set.empty) start end
+               mt [] [] (Set.insert start Set.empty) start end
             )
 
 createPathThroughMatter :: ModelTree -> DVec -> DVec -> Maybe [DVec]
 createPathThroughMatter mt start end =
-    if lookupTree end mt || lookupTree start mt then
+    if not (lookupTree end mt) || not (lookupTree start mt) then
         Nothing
     else
         fmap
             List.reverse
             (createPathThroughSpace_
                 (\at -> lookupTree at mt)
-                mt [] (Set.insert start Set.empty) start end
+                mt [] [] (Set.insert start Set.empty) start end
             )
 
 {- Given a point list, make a trace list 

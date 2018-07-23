@@ -14,6 +14,7 @@ import qualified System.Environment as SysEnv
 import qualified Data.Octree as O
 
 import Types
+import qualified Moves as M
 import qualified ModelTree as MT
 import qualified Region as R
     
@@ -330,18 +331,75 @@ pathThroughShapes grounded connectome =
 
 connectomeShapeID :: ConnectomeTree -> WShapeID
 connectomeShapeID (ConnectomeTree ct _) = ct
-        
-drawPathsToShapes :: ConnectomeTree ->    Set WShapeID -> Connectome -> WorldShapes -> Set DVec
-drawPathsToShapes (ConnectomeTree tr lst) grounded        connectome    wshapes =
+
+{- Given the set of points in a shape, select a point from the =0 plane and return a route
+ - through matter between the point referenced by the shapeid and the ground point.
+ -}
+groundOneShape :: ModelTree -> WShapeID -> Set DVec -> Set DVec
+groundOneShape mt (WShapeID sid) shape =
+    let
+        -- Choose a point at plane 0
+        plane0 = Set.filter (\(DVec x y z) -> y == 0) shape
+        chosenGround =
+            case Set.toList (trace ("plane0 " ++ (show plane0)) plane0) of
+              hd : tl -> hd
+              _ -> sid
+
+        matterPath = M.createPathThroughMatter mt chosenGround sid
+    in
+    (trace ("matterPath from " ++ (show sid) ++ " to " ++ (show chosenGround) ++ " via " ++ (show matterPath)) matterPath)
+    |> fmap Set.fromList
+    |> fmap (Set.insert chosenGround)
+    |> optionDefault Set.empty
+
+connectTwoShapes :: ModelTree -> WShapeID -> WShapeID -> Set DVec
+connectTwoShapes mt (WShapeID sid) (WShapeID eid) =
+    let
+        matterPath = M.createPathThroughMatter mt sid eid
+    in
+    matterPath
+    |> fmap Set.fromList
+    |> fmap (Set.insert sid)
+    |> optionDefault Set.empty
+       
+drawPathsToShapes :: ConnectomeTree ->    Set WShapeID -> Connectome -> WorldShapes ->       ModelTree -> Set DVec
+drawPathsToShapes (ConnectomeTree tr@(WShapeID wid) lst) grounded        connectome    ws@(WorldShapes shapes) targetModel =
     if tr == WShapeID (DVec 0 0 0) then
         -- Ground the shapes in lst
         List.foldl
-            (\s ct ->
-                 Set.union s (getShapeSet (connectomeShapeID ct) wshapes)
+            (\fig ctree ->
+                 let
+                     sid = connectomeShapeID ctree
+                     shapeSet =
+                         shapes
+                         |> Map.lookup (cubeIDFromWShapeID sid)
+                         |> optionThen (Map.lookup sid)
+                         |> optionDefault Set.empty
+
+                     groundSnake = groundOneShape targetModel (trace ("grounding " ++ (show sid)) sid) shapeSet
+                 in
+                 Set.union
+                    (drawPathsToShapes ctree grounded connectome ws targetModel)
+                    (Set.union groundSnake fig)
             )
             Set.empty
             lst
     else
-        -- Connect the shapes in lst to tr
-        Set.empty
-        
+        List.foldl
+            (\fig ctree ->
+                 let
+                     sid = connectomeShapeID ctree
+                     shapeSet =
+                         shapes
+                         |> Map.lookup (cubeIDFromWShapeID sid)
+                         |> optionThen (Map.lookup sid)
+                         |> optionDefault Set.empty
+
+                     connectSnake = connectTwoShapes targetModel (WShapeID wid) (trace ("connecting " ++ (show sid) ++ " to " ++ (show wid)) sid)
+                 in
+                 Set.union
+                        (drawPathsToShapes ctree grounded connectome ws targetModel)
+                        (Set.union connectSnake fig)
+            )
+            Set.empty
+            lst

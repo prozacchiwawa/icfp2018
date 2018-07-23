@@ -166,7 +166,12 @@ addFilled :: DVec -> ModelTree -> ModelTree
 addFilled dv mt =
     let newFilled = Set.insert dv (filled mt) in
     mt { filled = newFilled }
-        
+
+addFilledSet :: Set DVec -> ModelTree -> ModelTree
+addFilledSet ds mt =
+    let newFilled = Set.union ds (filled mt) in
+    mt { filled = newFilled }
+       
 foldZXY_ u@(DVec ux uy uz) s@(DVec sx sy sz) dv@(DVec x y z) f a mt =
     if z >= uz then
         foldZXY_ u s (DVec (x+1) y sz) f a mt

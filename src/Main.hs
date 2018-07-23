@@ -95,7 +95,7 @@ runSubCommands args =
 
         runSubCommands tl
 
-      "skeleton" : (filename : (outfile : tl)) -> do
+      "skeleton" : (filename : (outf : tl)) -> do
         file <- B.readFile filename
         let tree = MT.makeTree 8 file
         let extractedCubes = Cubes.extract tree
@@ -108,17 +108,14 @@ runSubCommands args =
         putStrLn ("grounded " ++ (show grounded))
         putStrLn ("connectome " ++ (show connectome))
 
-        let shapeID = WShapeID (DVec 8 0 7)
-                 
-        let neighborShapes = Cubes.neighborShapes shapeID connectome
-        putStrLn ("neighbors of " ++ (show shapeID) ++ " " ++ (show neighborShapes))
-
         let ct = pathThroughShapes grounded connectome
         putStrLn ("paths " ++ (show ct))
 
-        let skeleton = drawPathsToShapes ct grounded connectome wshapes
-        putStrLn ("skeleton " ++ (show skeleton))
-                 
+        let skeleton = drawPathsToShapes ct grounded connectome wshapes tree
+
+        let skeletonTree = MT.addFilledSet skeleton (MT.emptyTree (MT.cube tree) (bound tree))
+        putStrLn ("skeleton " ++ (show skeletonTree))
+            
         runSubCommands tl
                  
       -- Time to finish at least one strategy completely
